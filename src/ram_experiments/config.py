@@ -179,11 +179,30 @@ class RunConfig:
 
 
 def code_fingerprint(root: str | Path = ".") -> str:
-    """Hash of the git commit plus the dirty diff.
+    """Stable hash of the algorithm sources and dependency declaration.
 
-    Outside git (or before the first commit) hash the package sources instead, so
-    the manifest still identifies the code that will run.
+    The fingerprint intentionally excludes the git commit: freezing a manifest is
+    itself a commit, so including ``HEAD`` would make every manifest stale as soon
+    as it is committed. The commit and dirty state are recorded separately in each
+    run's ``environment.json``.
     """
+    root = Path(root)
+    digest = hashlib.sha256()
+    candidates = [root / "pyproject.toml", root / "uv.lock"]
+    package = root / "src" / "ram_experiments"
+    candidates.extend(sorted(path for path in package.rglob("*.py") if path.is_file()))
+    found = False
+    for path in candidates:
+        if not path.is_file():
+            continue
+        found = True
+        digest.update(str(path.relative_to(root)).encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest() if found else "unknown"
+
+
+def git_revision(root: str | Path = ".") -> dict[str, Any]:
+    """Observed git commit and dirty state, recorded for provenance only."""
     root = Path(root)
     try:
         commit = subprocess.run(
@@ -193,13 +212,6 @@ def code_fingerprint(root: str | Path = ".") -> str:
             capture_output=True,
             text=True,
         ).stdout.strip()
-        diff = subprocess.run(
-            ["git", "diff", "--binary", "HEAD"],
-            cwd=root,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
         status = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=root,
@@ -207,18 +219,9 @@ def code_fingerprint(root: str | Path = ".") -> str:
             capture_output=True,
             text=True,
         ).stdout
-        payload = "\n".join([commit, status, diff]).encode("utf-8")
-        return hashlib.sha256(payload).hexdigest()
     except (OSError, subprocess.CalledProcessError):
-        digest = hashlib.sha256()
-        package = root / "src" / "ram_experiments"
-        files = sorted(path for path in package.rglob("*.py") if path.is_file())
-        if not files:
-            return "unknown"
-        for path in files:
-            digest.update(str(path.relative_to(root)).encode("utf-8"))
-            digest.update(path.read_bytes())
-        return digest.hexdigest()
+        return {"commit": None, "dirty": None}
+    return {"commit": commit, "dirty": bool(status.strip())}
 
 
 def feasibility_tolerance(tau: float) -> float:

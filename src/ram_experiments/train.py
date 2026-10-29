@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from ram_experiments.config import RunConfig
+from ram_experiments.config import RunConfig, git_revision
 from ram_experiments.data import DatasetBundle
 from ram_experiments.energy import omega
 from ram_experiments.evaluate import evaluation_record, spectral_report
@@ -114,6 +114,7 @@ def environment_record(device: torch.device) -> dict[str, Any]:
         "gpu": gpu,
         "tf32": bool(getattr(torch.backends.cuda.matmul, "allow_tf32", False)),
         "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()),
+        "git": git_revision(),
     }
 
 
