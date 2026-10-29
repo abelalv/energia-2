@@ -18,10 +18,14 @@ REPO_URL = "https://github.com/abelalv/energia-2.git"
 REPO_DIR = pathlib.Path("/kaggle/working/energia-2")
 
 if not (REPO_DIR / "pyproject.toml").exists():
-    attached = sorted(pathlib.Path("/kaggle/input").glob("**/energia-2/pyproject.toml"))
-    if attached:
-        shutil.copytree(attached[0].parent, REPO_DIR, dirs_exist_ok=True)
-        print("repo copiado desde", attached[0].parent)
+    candidates = [
+        path
+        for path in pathlib.Path("/kaggle/input").rglob("pyproject.toml")
+        if (path.parent / "src" / "ram_experiments").exists()
+    ]
+    if candidates:
+        shutil.copytree(candidates[0].parent, REPO_DIR, dirs_exist_ok=True)
+        print("repo copiado desde", candidates[0].parent)
     else:
         subprocess.run(["git", "clone", "--depth", "1", REPO_URL, str(REPO_DIR)], check=True)
 
@@ -63,7 +67,7 @@ DATA = r"""import os, pathlib, subprocess, sys
 DATA_DIR = pathlib.Path(os.environ.get("RAM_DATA_DIR", "/kaggle/working/data/processed"))
 
 if not (DATA_DIR / "mnist_main.npz").exists():
-    attached = sorted(pathlib.Path("/kaggle/input").glob("**/data/processed/mnist_main.npz"))
+    attached = sorted(pathlib.Path("/kaggle/input").rglob("mnist_main.npz"))
     if attached:
         DATA_DIR = attached[0].parent
         print("datos adjuntos:", DATA_DIR)

@@ -24,7 +24,6 @@ CODE_IGNORE = {
     "figures",
     "manuscript",
     "historical_reference",
-    "mathematical_checks",
 }
 
 

@@ -38,8 +38,8 @@ activado. Si el repo es privado o la sesión no tiene internet:
    ```
 2. Sube `dist/kaggle/code` como **Kaggle Dataset** privado.
 3. Añade el dataset al notebook (`Add Data`) y deja `enable_internet: false` si lo deseas.
-   El notebook detecta `**/energia-2/pyproject.toml` y copia el repo a
-   `/kaggle/working/energia-2`.
+   El notebook busca cualquier `pyproject.toml` con `src/ram_experiments/` y copia el repo
+   a `/kaggle/working/energia-2`.
 
 ## 3. Datos: descarga o dataset
 
