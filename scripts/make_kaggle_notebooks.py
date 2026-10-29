@@ -177,11 +177,11 @@ subprocess.run(
 )
 """
 
-MAIN = r"""import os, pathlib, subprocess, sys
+CONFIG = r"""import os, pathlib, subprocess, sys
 
-STAGE = os.environ.get("RAM_STAGE", "E2")          # E2, E4 o E2,E4
-SHARD = int(os.environ.get("RAM_SHARD", "0"))
-TOTAL_SHARDS = int(os.environ.get("RAM_TOTAL_SHARDS", "1"))
+STAGE = os.environ.get("RAM_STAGE", "E2")          # E2 o E4
+SHARD = int(os.environ.get("RAM_SHARD", "0"))      # solo para 1 GPU
+TOTAL_SHARDS = int(os.environ.get("RAM_TOTAL_SHARDS", "1"))  # solo para 1 GPU
 MAX_SECONDS = int(os.environ.get("RAM_MAX_SECONDS", "30600"))  # 8 h 30 min
 
 MANIFEST = pathlib.Path("configs/main_manifest.jsonl")
@@ -205,6 +205,37 @@ subprocess.run(
     [sys.executable, "-m", "ram_experiments.cli", "inventory", "--manifest", str(MANIFEST)],
     check=True,
 )
+print("STAGE:", STAGE, "MAX_SECONDS:", MAX_SECONDS)
+"""
+
+DUAL = r"""import subprocess, sys
+
+# Dos procesos independientes, uno por GPU. No usa DataParallel: cada run conserva
+# batch 64, semillas y perfil numérico del protocolo.
+subprocess.run(
+    [
+        sys.executable,
+        "scripts/run_dual_gpu.py",
+        "--manifest",
+        str(MANIFEST),
+        "--stage",
+        STAGE,
+        "--run-root",
+        RUN_ROOT,
+        "--data-dir",
+        str(DATA_DIR),
+        "--max-seconds",
+        str(MAX_SECONDS),
+        "--gpus",
+        "0,1",
+    ],
+    check=True,
+)
+"""
+
+SINGLE = r"""import subprocess, sys
+
+# Alternativa de una sola GPU. SHARD y TOTAL_SHARDS permiten repartir sesiones.
 subprocess.run(
     [
         sys.executable,
@@ -220,7 +251,7 @@ subprocess.run(
         "--data-dir",
         str(DATA_DIR),
         "--device",
-        "cuda",
+        "cuda:0",
         "--shard",
         str(SHARD),
         "--total-shards",
@@ -359,18 +390,33 @@ def build() -> None:
                 _code(DATA),
                 _markdown(
                     "## 4. Configuración de la sesión\n\n"
-                    "Variables: `RAM_STAGE` (`E2` o `E4`), `RAM_SHARD`, `RAM_TOTAL_SHARDS`, "
-                    "`RAM_MAX_SECONDS`. Ejecuta cada shard en una sesión distinta y descarga "
-                    "`/kaggle/working/runs` al terminar."
+                    "Variables: `RAM_STAGE` (`E2` o `E4`) y `RAM_MAX_SECONDS`. "
+                    "La ejecución en 2 GPUs reparte los runs automáticamente; no toques "
+                    "`SHARD` ni `TOTAL_SHARDS` si usas esa opción."
                 ),
-                _code(MAIN),
-                _markdown("## 5. Agregación"),
+                _code(CONFIG),
+                _markdown(
+                    "## 5. Ejecución en 2 GPUs (recomendado en T4 x2)\n\n"
+                    "Lanza **dos procesos independientes**, uno por GPU, con shards disjuntos. "
+                    "No es `DataParallel`: cada run conserva batch 64, semillas y perfil "
+                    "numérico. Primero precalcula las referencias STD y después reparte el "
+                    "resto del manifiesto."
+                ),
+                _code(DUAL),
+                _markdown(
+                    "## 6. Ejecución en 1 GPU (alternativa)\n\n"
+                    "Úsala solo si no tienes dos GPUs o quieres repartir sesiones manualmente "
+                    "con `SHARD` y `TOTAL_SHARDS`."
+                ),
+                _code(SINGLE),
+                _markdown("## 7. Agregación"),
                 _code(MAIN_ANALYSIS),
                 _markdown(
-                    "## 6. Reanudación entre sesiones\n\n"
+                    "## 8. Reanudación entre sesiones\n\n"
                     "Sube la carpeta `runs/` como dataset privado y móntala en "
                     "`/kaggle/input/...`; copia solo los run directories incompletos a "
-                    "`/kaggle/working/runs` y vuelve a ejecutar con `--resume`."
+                    "`/kaggle/working/runs` y vuelve a ejecutar la celda de 2 GPUs. El script "
+                    "usa `--resume`."
                 ),
             ]
         ),

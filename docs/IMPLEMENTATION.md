@@ -15,6 +15,8 @@ probado** de lo que sigue **pendiente de ejecución** o de implementación.
 | Spectral norm (pesos efectivos vs originales) | ✅ | `tests/test_e0.py`. |
 | Reglas ADMM: fases, `tau0`, `rho`, doble reescalado | ✅ | `tests/test_e0.py`, `tests/test_training.py`. |
 | PSGD-M (proyección en entrada de época y tras cada minibatch) | ✅ | `tests/test_training.py`. |
+| Dos workers en 2 GPUs con shards disjuntos | ✅ | `scripts/run_dual_gpu.py`; no usa `DataParallel`. |
+| Precalentamiento de referencias STD | ✅ | `run --methods STD` + fase 1 del script. |
 | Split determinista, prefijos piloto, normalización | ✅ | `tests/test_training.py`. |
 | Manifiesto 36 piloto / 540 E2 + 60 E4 + 10 continuaciones | ✅ | `tests/test_training.py`. |
 | Reanudación checkpoint ↔ run continuo | ✅ | `tests/test_training.py`. |
@@ -44,6 +46,7 @@ manuscrito sigue siendo provisional hasta ejecutar E0/E1, el piloto y el benchma
 | Split y datos | `data.py` | `prepare_dataset`, `build_bundles`, `load_bundle` |
 | Inventario y deduplicación | `manifest.py` | `generate_main_manifest`, `validate_manifest` |
 | Ejecución con presupuesto | `runner.py` | `execute_manifest`, `RunOutcome` |
+| Dos GPUs | `scripts/run_dual_gpu.py` | dos workers, `CUDA_VISIBLE_DEVICES`, `--shard 0/1` |
 
 ## Convenciones numéricas
 

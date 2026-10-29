@@ -35,6 +35,23 @@ uv run python -m ram_experiments.cli run \
 - La estimación de sesiones se obtiene con `ram_experiments.cli kaggle-plan` usando el
   tiempo por época medido en el piloto.
 
+## Dos GPUs
+
+El notebook `03_main_session` trae una celda para **dos GPUs**. No usa `DataParallel`:
+lanza dos procesos independientes con `CUDA_VISIBLE_DEVICES=0` y `1`, y reparte los runs
+con `--shard 0/1`. Primero ejecuta las referencias STD y después el resto.
+
+```bash
+python scripts/run_dual_gpu.py \
+  --manifest configs/main_manifest.jsonl \
+  --stage E2 \
+  --max-seconds 30600 \
+  --gpus 0,1
+```
+
+No ejecutes la celda de 2 GPUs y la de 1 GPU al mismo tiempo. Para E4, E2 debe estar
+completo.
+
 ## Limitación
 
 Los notebooks se generaron y validaron sintácticamente, pero **no se ejecutaron en

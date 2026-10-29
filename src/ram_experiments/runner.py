@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import traceback
 from dataclasses import asdict, dataclass
@@ -63,7 +64,9 @@ def _ensure_init_state(run_root: Path, run: RunConfig) -> dict[str, torch.Tensor
         return torch.load(path, map_location="cpu", weights_only=True)
     model = make_model(run.architecture, run.seed)
     state = {name: tensor.detach().cpu() for name, tensor in model.state_dict().items()}
-    torch.save(state, path)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    torch.save(state, temporary)
+    os.replace(temporary, path)
     return state
 
 
@@ -230,6 +233,7 @@ def execute_manifest(
     manifest_path: str | Path,
     *,
     stages: set[str] | None = None,
+    methods: set[str] | None = None,
     run_root: str | Path = "runs",
     data_dir: str | Path = "data/processed",
     device: str = "auto",
@@ -244,12 +248,17 @@ def execute_manifest(
 ) -> dict[str, Any]:
     """Execute a manifest in a bounded session.
 
-    Returns a session summary and writes it next to the run directories.
+    ``methods`` filters the manifest (for example ``{"STD"}`` to pre-compute
+    references before parallel workers). ``total_shards`` and ``shard`` split the
+    remaining runs round-robin; two processes with disjoint shards can run on two
+    GPUs without sharing a run.
     """
     runs = read_manifest(manifest_path)
     all_runs = list(runs)
     if stages:
         runs = [run for run in runs if run.stage in stages]
+    if methods:
+        runs = [run for run in runs if run.method in methods]
     inventory = validate_manifest(runs)
     if not inventory["valid"]:
         raise ValueError(f"manifest has duplicate configurations: {inventory}")
@@ -328,6 +337,7 @@ def execute_manifest(
     summary = {
         "manifest": str(manifest_path),
         "stages": sorted(stages) if stages else None,
+        "methods": sorted(methods) if methods else None,
         "shard": shard,
         "total_shards": total_shards,
         "session_seconds": time.monotonic() - session_started,
@@ -337,7 +347,7 @@ def execute_manifest(
         "environment": environment_record(resolve_device(device)),
         "runs": [asdict(outcome) for outcome in outcomes],
     }
-    summary_path = run_root / f"session_{int(time.time())}.json"
+    summary_path = run_root / f"session_{time.time_ns()}_{os.getpid()}.json"
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
     summary["summary_path"] = str(summary_path)
     return summary

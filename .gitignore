@@ -44,6 +44,7 @@ E1/
 analysis/
 dist/
 kaggle/working/
+logs/
 checkpoints/
 runs/
 wandb/

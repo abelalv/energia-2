@@ -214,6 +214,8 @@ git push
 | 2026-10-29 | Kaggle como plataforma de ejecución principal | GPU gratuita/cuota semanal, notebooks reproducibles y datasets privados |
 | 2026-10-29 | `tau0` de PSGD-M = `max(Omega(W^3), tau_final)` | Define la transición 4–8 sin ambigüedad, igual que ADMM |
 | 2026-10-29 | Manifiesto: 540 E2 + 60 E4 + 10 continuaciones | Refleja el inventario del protocolo sin duplicar WD/NUC/SN por alpha |
+| 2026-10-29 | Dos GPUs = dos workers con shards disjuntos, no `DataParallel` | Mantiene batch 64, semillas y perfil numérico; `DataParallel` cambiaría el batch efectivo |
+| 2026-10-29 | Precomputar STD antes de los workers paralelos | Evita que dos procesos entrenen la misma referencia a la vez |
 
 ## 10. Notas y tareas pendientes
 

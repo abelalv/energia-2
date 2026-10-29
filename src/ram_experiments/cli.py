@@ -39,12 +39,6 @@ from ram_experiments.models import MLP
 from ram_experiments.runner import execute_manifest
 
 
-def _parse_stages(value: str | None) -> set[str] | None:
-    if not value:
-        return None
-    return {item.strip() for item in value.split(",") if item.strip()}
-
-
 def _cmd_manifest(args: argparse.Namespace) -> int:
     if args.stage == "pilot":
         runs = generate_pilot_manifest()
@@ -66,10 +60,17 @@ def _cmd_inventory(args: argparse.Namespace) -> int:
     return 0 if report["valid"] else 1
 
 
+def _parse_set(value: str | None) -> set[str] | None:
+    if not value:
+        return None
+    return {item.strip() for item in value.split(",") if item.strip()}
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     summary = execute_manifest(
         args.manifest,
-        stages=_parse_stages(args.stage),
+        stages=_parse_set(args.stage),
+        methods=_parse_set(args.methods),
         run_root=args.run_root,
         data_dir=args.data_dir,
         device=args.device,
@@ -431,6 +432,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Execute a manifest shard with resume")
     run_parser.add_argument("--manifest", required=True)
     run_parser.add_argument("--stage", default=None)
+    run_parser.add_argument("--methods", default=None, help="Filtro, p. ej. STD")
     run_parser.add_argument("--run-root", default="runs")
     run_parser.add_argument("--data-dir", default="data/processed")
     run_parser.add_argument("--device", default="auto")

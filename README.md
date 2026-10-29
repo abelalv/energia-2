@@ -116,6 +116,20 @@ media/desviación y hashes. Ver [`data/README.md`](./data/README.md).
 | `kaggle/02_pilot/` | Sí | 36 runs de 5 épocas; mide tiempos y memoria. |
 | `kaggle/03_main_session/` | Sí | Shard de E2/E4 con `--max-seconds` y reanudación. |
 
+En una instancia **T4 x2**, el notebook `03_main_session` trae una celda que ejecuta
+**dos workers independientes**, uno por GPU, con shards disjuntos:
+
+```bash
+python scripts/run_dual_gpu.py \
+  --manifest configs/main_manifest.jsonl \
+  --stage E2 \
+  --max-seconds 30600 \
+  --gpus 0,1
+```
+
+No es `DataParallel`: cada run conserva batch 64, semillas y perfil numérico. El script
+precalcula primero las referencias STD y después reparte el resto.
+
 ```bash
 # Publicar (ajusta el id de cada kernel-metadata.json)
 kaggle kernels push -p kaggle/01_e0_e1

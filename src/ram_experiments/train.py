@@ -95,11 +95,15 @@ def resolve_device(requested: str = "auto") -> torch.device:
 def environment_record(device: torch.device) -> dict[str, Any]:
     """Observed environment, not a compatibility guarantee."""
     gpu = None
+    index = device.index if device.type == "cuda" and device.index is not None else 0
     if torch.cuda.is_available():
+        if index >= torch.cuda.device_count():
+            index = 0
         gpu = {
-            "name": torch.cuda.get_device_name(0),
-            "capability": list(torch.cuda.get_device_capability(0)),
-            "total_memory_bytes": int(torch.cuda.get_device_properties(0).total_memory),
+            "index": index,
+            "name": torch.cuda.get_device_name(index),
+            "capability": list(torch.cuda.get_device_capability(index)),
+            "total_memory_bytes": int(torch.cuda.get_device_properties(index).total_memory),
         }
     return {
         "python": os.sys.version.split()[0],
@@ -107,6 +111,8 @@ def environment_record(device: torch.device) -> dict[str, Any]:
         "numpy": np.__version__,
         "cuda_available": torch.cuda.is_available(),
         "cuda_version": torch.version.cuda,
+        "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
         "cudnn_version": torch.backends.cudnn.version()
         if hasattr(torch.backends, "cudnn")
         else None,

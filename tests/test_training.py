@@ -25,6 +25,7 @@ from ram_experiments.manifest import (
     validate_manifest,
     write_manifest,
 )
+from ram_experiments.runner import execute_manifest
 from ram_experiments.train import train_run
 
 
@@ -53,6 +54,21 @@ def test_manifest_roundtrip(tmp_path: Path):
     assert len(loaded) == 36
     assert {run.config_hash() for run in loaded} == {run.config_hash() for run in runs}
     assert loaded[0].train.save_epochs == (0, 3, 8, 15, 25)
+
+
+def test_method_filter_prepares_only_std(tmp_path: Path):
+    runs = generate_pilot_manifest(fingerprint="test")
+    path = write_manifest(runs, tmp_path / "pilot.jsonl")
+    summary = execute_manifest(
+        path,
+        stages={"pilot"},
+        methods={"STD"},
+        run_root=tmp_path / "runs",
+        data_dir=tmp_path / "data",
+        dry_run=True,
+    )
+    assert summary["n_planned"] == 6
+    assert all("STD" in run_id for run_id in summary["planned"])
 
 
 def test_alpha_independent_methods_do_not_duplicate():
