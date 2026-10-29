@@ -1,0 +1,18 @@
+{
+  "math_expressions_identical": 186,
+  "pseudocode_blocks_identical": 2,
+  "mathematical_findings": 28,
+  "historical_code_findings": 27,
+  "claims": 15,
+  "experiment_stages": 7,
+  "proposed_cli_commands_preserved": 8,
+  "prompt_copies_identical": true,
+  "prompt_provider_dependencies": false,
+  "both_datasets_in_main_and_pilot": true,
+  "mathematical_checks_passed": 227,
+  "training_runs": 0,
+  "source_documents_unchanged": 6,
+  "original_files_unchanged": 64,
+  "revised_pdf_pages": 12,
+  "manuscript_and_historical_copies_unchanged": true
+}

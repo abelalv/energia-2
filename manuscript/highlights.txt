@@ -1,0 +1,5 @@
+Graph energy is bounded above and below by an additive nuclear-norm surrogate.
+Quadratic growth gives local spectral stability relative to a minimizer set.
+One singular-value threshold projects all layers onto a joint budget.
+Finite-iteration residuals bound feasibility and conditional stationarity.
+A reproducible protocol separates proven claims from pending experiments.

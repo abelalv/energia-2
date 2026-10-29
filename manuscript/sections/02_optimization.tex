@@ -1,0 +1,205 @@
+\section{Projection and first-order optimality}\label{sec:projection}
+For $\tau\ge0$ define
+\begin{equation}\label{eq:constraint}
+ C_\tau=\{W:\Omega(W)\le\tau\},\qquad K_\tau=C_\tau\times\prod_\ell\R^{n_\ell}.
+\end{equation}
+The set $C_\tau$ is nonempty, compact and convex. Indeed, $\sum\norm{W_\ell}_F\le\sum\norm{W_\ell}_*\le\tau/2$, and the defining function is continuous and convex. The full parameter set $K_\tau$ is closed and convex but has unbounded bias directions. Consider
+\begin{equation}\label{eq:problem}
+ \min_{(W,b)\in K_\tau} f(W,b),
+\end{equation}
+where the chosen objective (data loss or an explicitly specified regularized loss) must be recorded. We do not assume that a minimum of~\eqref{eq:problem} exists merely because $W$ is budgeted.
+
+\begin{proposition}[Joint Euclidean projection]\label{prop:projection}
+Let $Y_\ell=Q_\ell\diag(\sigma_\ell)V_\ell^\top$ be reduced SVDs, including all $d_\ell$ singular values, and let $\sigma$ be their concatenation. The unique solution of
+\begin{equation}\label{eq:projection}
+ \min_{Z\in C_\tau}\frac12\sum_\ell\norm{Z_\ell-Y_\ell}_F^2
+\end{equation}
+is $Z_\ell=Q_\ell\diag((\sigma_\ell-t)_+)V_\ell^\top$ with the following conventions.
+\begin{enumerate}
+\item If $\Omega(Y)\le\tau$, choose $t=0$ and $Z=Y$.
+\item If $0<\tau<\Omega(Y)$, $t\in(0,\max_i\sigma_i)$ is the unique solution of $h(t)=\sum_i(\sigma_i-t)_+=\tau/2$.
+\item If $\tau=0$, then $Z=0$. Every $t\ge\max_i\sigma_i$ represents this same projection; the threshold is not unique. For $Y=0$, choose $t=0$.
+\end{enumerate}
+Repeated singular values and nonunique singular vectors do not affect the unique projected matrix.
+\end{proposition}
+\begin{proof}
+For prescribed singular values $z_\ell\ge0$, the trace inequality $\ip{Z_\ell}{Y_\ell}\le\sum_i z_{\ell i}\sigma_{\ell i}$ implies
+$\norm{Z_\ell-Y_\ell}_F^2\ge\sum_i(z_{\ell i}-\sigma_{\ell i})^2$, with equality when singular vectors are aligned. Thus~\eqref{eq:projection} reduces to
+\[
+ \min_{z\ge0,\;\boldsymbol1^\top z\le\tau/2}\tfrac12\norm{z-\sigma}_2^2.
+\]
+For an active positive radius, the KKT equations yield $z_i=(\sigma_i-t)_+$ and $\sum_i z_i=\tau/2$ with $t>0$. If the input is feasible the minimizer is itself. At radius zero the feasible set is a singleton. The function $h$ is continuous and strictly decreasing on $[0,\max\sigma]$ when $\max\sigma>0$, and identically zero on $[\max\sigma,\infty)$. The intermediate value theorem proves existence and uniqueness of the active positive-radius threshold. The original squared-distance objective is strictly convex on a convex set, proving uniqueness of $Z$ even with repeated singular values. The trace inequality is a standard matrix-analysis fact~\cite{Bhatia1997}; the scalar reduction is the familiar $\ell_1$-ball projection~\cite{Duchi2008L1proj}.
+\end{proof}
+
+Bisection evaluates $h$; it is not the only threshold solver. If $a_1\ge\cdots\ge a_D$ are the sorted concatenated singular values and $q=\tau/2>0$ in the active case, put
+\[
+ j_* =\max\left\{j:a_j>\frac{\sum_{i=1}^j a_i-q}{j}\right\},\qquad
+ t=\frac{\sum_{i=1}^{j_*}a_i-q}{j_*}.
+\]
+This gives the same threshold~\cite{Duchi2008L1proj}. For objective $(\rho/2)\norm{Z-Y}_F^2$ and constraint $\Omega(Z)-\tau\le0$ with multiplier $\nu\ge0$, the singular-value stationarity equation is $\rho(z_i-\sigma_i)+2\nu=0$ when $z_i>0$. Therefore $t=2\nu/\rho$. If the constraint is written $\sum_i z_i\le\tau/2$, its multiplier is $2\nu$. The projection itself is independent of positive $\rho$; its multiplier scales with $\rho$.
+
+\paragraph{Layer budgets and zero layers.}
+For fixed radii $q_\ell\ge0$ with $\sum_\ell q_\ell=\tau/2$, the product set $\prod_\ell\{Z_\ell:\norm{Z_\ell}_*\le q_\ell\}$ is contained in $C_\tau$. Separate projections solve the product-set problem, generally with different thresholds. This restriction need not be worse for prediction, and no universal ordering of learning performance follows. With $Y_\ell\ne0$ and $q_\ell>0$, its individual nuclear-ball projection cannot be zero: it is either unchanged or has nuclear norm $q_\ell>0$. In a joint projection, however, an entire layer vanishes exactly when its largest input singular value is at most the common $t$. This is distinct from numerical SVD failure and from applying a fixed proximal threshold.
+
+\paragraph{Approximate SVDs.}
+The formula above requires all singular values relevant to the projection. It is not an exact projection of $Y$ merely because a truncated SVD is used. If $\widetilde Y$ satisfies $\norm{Y-\widetilde Y}_F\le\epsilon$ and $\widetilde Z=\Pi_{C_\tau}(\widetilde Y)$ is computed exactly, then nonexpansiveness gives
+$\norm{\widetilde Z-\Pi_{C_\tau}(Y)}_F\le\epsilon$; $\widetilde Z$ remains feasible. Writing $d=\dist(Y,C_\tau)$, its projection-objective excess is at most $d\epsilon+\epsilon^2/2$, by the triangle inequality. For an arbitrary approximate output $\widehat Z$ within $\epsilon$ of the exact projection, feasibility is only bounded by $(\Omega(\widehat Z)-\tau)_+\le2\sqrt D\epsilon$. These estimates require a justified tail or output-error bound. Rounded arithmetic alone supplies no rigorous enclosure. The evaluation specified here uses full SVDs before studying approximations.
+
+\begin{proposition}[Spectral-ball projection and scaling]\label{prop:spectral}
+For $a\ge0$ and $Y=Q\diag(\sigma)V^\top$, the Frobenius projection onto $\{Z:\norm Z_2\le a\}$ is
+\begin{equation}\label{eq:spectral}
+ \Pi(Y)=Q\diag(\min(\sigma_i,a))V^\top.
+\end{equation}
+It generally differs from $\min(1,a/\sigma_{\max}(Y))Y$, interpreted as zero for $Y=0$ when needed. Positive uniform scaling of a nonzero matrix leaves its normalized singular-value distribution and entropy effective rank unchanged.
+\end{proposition}
+\begin{proof}
+Use the same trace inequality as above to reduce to independently projecting each singular value onto $[0,a]$. For $Y=\diag(2,1)$, $a=1$, clipping gives $\diag(1,1)$ at squared distance $1$, while rescaling gives $\diag(1,1/2)$ at squared distance $5/4$. For any $c>0$, $c\sigma_i/\sum_j c\sigma_j=\sigma_i/\sum_j\sigma_j$, proving the last statement.
+\end{proof}
+Spectral normalization~\cite{Miyato2018SpectralNorm} parametrizes effective weights by division by an estimate of their largest singular value; it is not~\eqref{eq:spectral}. Measurements must use the weights actually applied in the forward pass. Power iteration can introduce additional approximation error. Spectral bounds $\norm{W_\ell}_2\le a_\ell$ do give the dimensional bound
+\[
+ \Omega(W)\le2\sum_\ell d_\ell a_\ell.
+\]
+Likewise $\norm{W_\ell}_F\le c_\ell$ implies $\Omega(W)\le2\sum_\ell\sqrt{d_\ell}c_\ell$. These bounds need not match a prescribed $\tau$. A penalty such as weight decay does not impose a fixed norm cap at every step, but with a lower-bounded data loss and a known regularized-objective sublevel it can also yield quantitative norm bounds. Blanket claims that SN or WD provides no control of $\Omega$ are therefore incorrect.
+
+\begin{proposition}[Necessary optimality conditions]\label{prop:kkt}
+Suppose $f$ is differentiable in a neighborhood of a local minimizer $\theta_*=(W_*,b_*)$ of~\eqref{eq:problem}. Then
+\begin{equation}\label{eq:normal_kkt}
+ 0\in\nabla_W f(\theta_*)+N_{C_\tau}(W_*),\qquad \nabla_b f(\theta_*)=0,
+\end{equation}
+where $N_C(x)=\{v:\ip v{z-x}\le0\text{ for every }z\in C\}$ for $x\in C$. If $\tau>0$, there is $\nu_*\ge0$ such that
+\begin{equation}\label{eq:scalar_kkt}
+ \Omega(W_*)\le\tau,\quad \nu_*(\Omega(W_*)-\tau)=0,\quad
+ 0\in\nabla_{W_\ell}f(\theta_*)+2\nu_*\partial\norm{W_{\ell,*}}_*.
+\end{equation}
+For a compact positive-rank SVD $W_{\ell,*}=Q\Sigma V^\top$,
+\begin{equation}\label{eq:subgradient}
+ \partial\norm{W_{\ell,*}}_*=
+ \{QV^\top+H:Q^\top H=0,\ HV=0,\ \norm H_2\le1\}.
+\end{equation}
+At zero this is the full spectral unit ball. These conditions are not sufficient for global optimality of a nonconvex network objective.
+\end{proposition}
+\begin{proof}
+Every feasible line segment from a local minimizer has a nonnegative one-sided directional derivative, giving~\eqref{eq:normal_kkt}. For $\tau>0$, zero weights are strictly feasible for the continuous convex constraint; the normal-cone formula for this convex sublevel set is $N_{C_\tau}(W_*)=\{\nu G:\nu\ge0,G\in\partial\Omega(W_*),\nu(\Omega(W_*)-\tau)=0\}$, giving~\eqref{eq:scalar_kkt}. Formula~\eqref{eq:subgradient} is the nuclear-norm subdifferential~\cite{Watson1992Subdiff}: duality with the spectral norm characterizes a subgradient by $\norm G_2\le1$ and $\ip G W=\norm W_*$. Attaining this equality on the nonzero singular subspaces forces the $QV^\top$ component and leaves a spectral contraction on the orthogonal complements. For $W=0$ only $\norm G_2\le1$ remains. At $\tau=0$, use~\eqref{eq:normal_kkt} with $C_0=\{0\}$; the strict-feasibility argument is unavailable.
+\end{proof}
+
+\section{A split algorithm and finite-iteration certificates}\label{sec:algorithm}
+Introduce $Z\in C_\tau$ and the equality $W=Z$. With scaled dual variable $u$ (never used for singular vectors), fixed $\rho>0$ and indicator $I_C$, the scaled augmented Lagrangian is
+\begin{equation}\label{eq:augmented}
+ \mathcal L_\rho(W,b,Z,u)=f(W,b)+I_{C_\tau}(Z)
+ +\frac\rho2\norm{W-Z+u}_F^2-\frac\rho2\norm u_F^2.
+\end{equation}
+This is the equality-constrained splitting of~\eqref{eq:problem}. We do not use the expression $f+\nu g+(\rho/2)g^2$ as an augmented Lagrangian for the original inequality $g\le0$, because that expression penalizes strictly feasible points too.
+
+\begin{algorithm}[htbp]
+\caption{Exact ADMM step for a global nuclear-norm budget}\label{alg:admm}
+\begin{algorithmic}[1]
+\Require $\tau\ge0$, $\rho>0$, initial $(W^0,b^0)$; set $Z^0=\Pi_{C_\tau}(W^0)$, $u^0=0$.
+\For{$k=0,1,\ldots$}
+\State Choose an attained minimizer
+\Statex\hspace{1em} $ (W^{k+1},b^{k+1})\in\argmin_{W,b}\bigl[f(W,b)+\frac\rho2\norm{W-Z^k+u^k}_F^2\bigr]$.
+\State $Y_\ell\gets W_\ell^{k+1}+u_\ell^k$ for every layer.
+\State $Z^{k+1}\gets\Pi_{C_\tau}(Y)$ using one threshold on all layer singular values (Proposition~\ref{prop:projection}).
+\State $u^{k+1}\gets u^k+W^{k+1}-Z^{k+1}$.
+\State Record $r^{k+1}=W^{k+1}-Z^{k+1}$ and $s^{k+1}=\rho(Z^{k+1}-Z^k)$.
+\State Measure loss, predictions and $\Omega$ separately at $(W^{k+1},b^{k+1})$ and $(Z^{k+1},b^{k+1})$.
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+The exact algorithm presupposes an attained solution of its first subproblem; without bias coercivity, even this requires care. A finite number of minibatch SGD steps, with or without momentum, is an inexact variant. It must record the inner update rule and projection frequency. Projected SGD, in contrast, applies $W^+=\Pi_{C_\tau}(W-\eta\widehat\nabla_W f)$ and updates biases separately. It is another way to obtain feasible postprojection iterates, so feasibility is not exclusive to ADMM.
+
+If $\rho$ is changed after an iteration, first form $u_{\rm temp}=u^k+r^{k+1}$ with the old $\rho_k$, then set $u^{k+1}=(\rho_k/\rho_{k+1})u_{\rm temp}$ to preserve the unscaled multiplier $y=\rho u$. The actual ratio must be used even when $\rho$ is clipped at bounds. A changing $\tau_k$ changes the feasible problem: certificates must state whether they concern the current or final budget. Neither adaptation is part of the fixed-parameter exact algorithm above.
+
+\begin{proposition}[Finite-iteration feasibility]\label{prop:feasibility}
+For arbitrary $W,Z$ and $\tau\ge0$, with $v_\tau(X)=(\Omega(X)-\tau)_+$,
+\begin{align}\label{eq:feasibility}
+ v_\tau(W)&\le v_\tau(Z)+2\sum_\ell\norm{W_\ell-Z_\ell}_*\\
+ &\le v_\tau(Z)+2\sqrt{R(W,Z)}\norm{W-Z}_F
+ \le v_\tau(Z)+2\sqrt D\norm{W-Z}_F.\nonumber
+\end{align}
+In particular exact feasible $Z$ removes the first term.
+\end{proposition}
+\begin{proof}
+Since $\Omega(W)-\tau\le\Omega(Z)-\tau+|\Omega(W)-\Omega(Z)|$, monotonicity and subadditivity of the positive part give the first bound via Lemma~\ref{lem:perturbation}. The remaining bounds follow from the same lemma.
+\end{proof}
+The direct nuclear-residual sum is the tightest of these computable upper bounds; $R$ exploits known residual ranks, whereas $D$ avoids rank estimation. A small Frobenius residual may still give a loose bound in a high-dimensional network. These are mathematical inequalities; their floating-point evaluations with stated tolerances are numerical certificates, not interval-validated proofs. A feasible $Z$ alone says nothing about exact feasibility of $W$ unless $r=0$.
+
+\begin{proposition}[A posteriori stationarity at a feasible point]\label{prop:stationarity}
+Consider one step with $\rho$ fixed during that step and exact $Z^+=\Pi_{C_\tau}(W^++u)$, $u^+=u+W^+-Z^+$. Put
+\[
+ x=(W^+,b^+),\quad z=(Z^+,b^+),\quad
+ r=W^+-Z^+,\quad s=(\rho(Z^+-Z^{\rm old}),0),
+\]
+\[
+ e=\bigl(\nabla_W f(x)+\rho(W^+-Z^{\rm old}+u),\ \nabla_b f(x)\bigr).
+\]
+Suppose $f$ is differentiable at $x,z$ and
+$\norm{\nabla f(z)-\nabla f(x)}_2\le L\norm{x-z}_2$
+(for example its gradient is $L$-Lipschitz on a region containing their segment). Then
+\begin{equation}\label{eq:stationarity}
+ \dist\bigl(0,\nabla f(z)+N_{K_\tau}(z)\bigr)
+ \le\norm e_2+\norm s_2+L\norm r_F.
+\end{equation}
+\end{proposition}
+\begin{proof}
+Projection optimality implies $\rho(W^++u-Z^+)=\rho u^+\in N_{C_\tau}(Z^+)$. Thus $n=(\rho u^+,0)\in N_{K_\tau}(z)$, and direct substitution gives $\nabla f(x)+n=e-s$. Consequently
+\[
+ \dist(0,\nabla f(z)+N_{K_\tau}(z))
+ \le\norm{\nabla f(z)+n}_2
+ \le\norm e_2+\norm s_2+L\norm r_F.
+\]
+The cone is evaluated at the feasible point $z$, not at $x$.
+\end{proof}
+An exact differentiable first-subproblem minimizer gives $e=0$, but practical SGD does not. A minibatch gradient cannot be silently substituted for the full gradient in $e$. If a certified bound $\norm{\widehat g-\nabla f(x)}_2\le\delta$ is available, the same argument using $\widehat g$ in $e$ adds $\delta$ to the right side. For a feasible inexact projection $\widehat Z$, if
+$\dist(\rho(W^++u-\widehat Z),N_{C_\tau}(\widehat Z))\le\eta$, the same proof adds $\eta$ to~\eqref{eq:stationarity}, using the corresponding $r,s,e,z$. Feasibility error alone does not bound this normal-cone defect. If the approximate output is infeasible, this statement does not apply there. For ReLU networks, a justified smooth region and $L$ must be supplied; otherwise report the ingredients as diagnostics and do not label their sum a validated smooth stationarity certificate.
+
+\paragraph{Why block descent is insufficient for convergence.}
+At fixed $W,b,Z,\rho$, write $r=W-Z$. Expanding~\eqref{eq:augmented} gives a dual-dependent term $\rho\ip u r$. Therefore
+\begin{equation}\label{eq:dual_increase}
+ \mathcal L_\rho(W,b,Z,u+r)-\mathcal L_\rho(W,b,Z,u)=\rho\norm r_F^2.
+\end{equation}
+The dual step increases this Lagrangian. Primal block descent alone cannot imply a decreasing telescopic bound after the dual update. Exact projection, smoothness and bounded iterates therefore do not constitute the earlier claimed proof of residual convergence. We do not claim monotone loss, monotone residuals, a nonconvex ADMM convergence theorem, or a linear convergence rate for the implemented stochastic algorithm.
+
+For comparison, the standard convex ADMM result in Boyd et al.\ (Sections 3.2--3.3)~\cite{Boyd2011ADMM} uses closed proper convex objectives, existence of a saddle point, exact subproblem solutions and fixed $\rho$. These assumptions are not established for the neural-network implementation. The controlled quadratic experiments can study that regime, while~\eqref{eq:feasibility} and~\eqref{eq:stationarity} remain finite-iteration statements. Small measured residuals in a finite run do not prove an asymptotic limit.
+
+\section{Penalty bounds and claims that require extra hypotheses}\label{sec:penalty}
+Define the separate hinge-penalty objective
+\[
+ F_\lambda(\theta)=f(\theta)+\lambda v_\tau(W),\qquad\lambda>0.
+\]
+It is generally nonsmooth and is not the objective of the ADMM first step. A nuclear penalty $f+\lambda\Omega$ is yet another objective, without the hinge. Smooth-gradient PL theory cannot be applied to any of these by changing names. Exact penalization is classical~\cite{HanMangasarian1979}; the following elementary bounds state precisely what is used here.
+
+\begin{proposition}[Valid penalty-violation bounds]\label{prop:penalty}
+If $a$ is a genuine lower bound for $f$ on its domain, then
+\begin{equation}\label{eq:penalty_lower}
+ \lambda v_\tau(W)\le F_\lambda(\theta)-a.
+\end{equation}
+Alternatively, assume there are a globally constrained optimal point $\theta_*$, value $f_*=f(\theta_*)$ and $\nu_*\ge0$ with feasibility, complementarity and the global saddle inequality
+\begin{equation}\label{eq:saddle}
+ f(\theta)+\nu_*(\Omega(W)-\tau)\ge f_*\quad\hbox{for every }\theta.
+\end{equation}
+If $\lambda>\nu_*$, then $\min F_\lambda=f_*$ and
+\begin{equation}\label{eq:penalty_saddle}
+ (\lambda-\nu_*)v_\tau(W)\le F_\lambda(\theta)-f_*.
+\end{equation}
+Every global minimizer of $F_\lambda$ is then a constrained global minimizer.
+\end{proposition}
+\begin{proof}
+The first inequality is immediate from $f\ge a$. For the second, if $g=\Omega(W)-\tau\ge0$, then~\eqref{eq:saddle} gives $F_\lambda-f_*\ge(\lambda-\nu_*)g$. If $g<0$, it gives $F_\lambda=f\ge f_*-\nu_*g\ge f_*$. Equality $F_\lambda(\theta_*)=f_*$ follows from feasibility. Thus the minimum is $f_*$, and equality at any minimizer forces $v_\tau=0$ when $\lambda>\nu_*$. Its objective value is then $f_*$.
+\end{proof}
+Global saddle conditions follow from convexity and suitable constraint qualification, but are not consequences of local neural-network KKT conditions. Neither bound warrants a violation estimate using $\lambda^{-1}(F_\lambda-F_\lambda^*)$ in general. For
+\[
+ f(w)=\tfrac12(w-2)^2,\quad\Omega(w)=2|w|,\quad\tau=2,\quad\lambda=1,
+\]
+$F_\lambda$ has minimizer $w_*=1$ and minimum $1/2$, but at $w=3/2$ its gap is $5/8$ while the violation is $1$. Even a feasible penalized optimum does not repair the claimed bound; the data loss can decrease outside the constraint. For $0<\lambda<1/2$ in this example, the minimizer $2-2\lambda>1$ is itself infeasible.
+
+If~\eqref{eq:saddle} holds, $\Omega(W_*)=\tau$ and $\nu_*>0$, then for feasible $\theta$,
+\[
+ 0\le\Omega(W_*)-\Omega(W)\le\frac{f(\theta)-f_*}{\nu_*}.
+\]
+This is a valid replacement for a multiplier-based gap statement. An active constraint does not imply a positive multiplier: minimizing $(w-1)^2/2$ over $|w|\le1$ has active solution $1$ and multiplier zero. Without convexity or a global saddle property, the displayed bound need not follow from KKT: $f(w)=1-w^3$, $\Omega=2|w|$, $\tau=2$, $w_*=1$, $\nu_*=3/2$ satisfies KKT, yet $w=0$ would require $2\le2/3$.
+
+Finally, a recursion $\Delta_{k+1}\le q\Delta_k+\epsilon_k$, $0<q<1$, yields
+\[
+ \Delta_k\le q^k\Delta_0+\sum_{j=0}^{k-1}q^{k-1-j}\epsilon_j.
+\]
+Summable errors alone do not imply a geometric rate: for equality and $\epsilon_j=(j+1)^{-2}$, $\Delta_k\ge k^{-2}$. Even for an unrelated smooth PL objective, the exact gradient-descent decrease with step $\alpha\in(0,2/L)$ gives the factor $1-2\alpha\mu(1-\alpha L/2)$, not the unrestricted factor $1-\alpha\mu$. Since those hypotheses and that iteration are not established here, no PL rate is retained for the neural-network algorithm.

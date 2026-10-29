@@ -1,0 +1,12 @@
+{
+  "python": "3.11.8 | packaged by conda-forge | (main, Feb 16 2024, 20:49:36) [Clang 16.0.6 ]",
+  "numpy": "1.26.4",
+  "seed": 20261013,
+  "dtype": "float64",
+  "training_runs": 0,
+  "passed": 227,
+  "graph_ratio_range": [
+    0.6970455805029009,
+    1.0000000000000002
+  ]
+}

@@ -1,0 +1,82 @@
+[project]
+name = "energia-2"
+version = "0.1.0"
+description = "Implementacion y benchmark del presupuesto global de norma nuclear en MLPs (protocolo RAM-2026-10-13-v1), ejecutable en Kaggle."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+keywords = []
+authors = [
+    { name = "abel alvarez", email = "aalvarezb@unal.edu.co" },
+]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Typing :: Typed",
+]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "torch>=2.2",
+    "torchvision>=0.17",
+]
+
+[project.optional-dependencies]
+oracle = ["cvxpy>=1.5"]
+
+[project.scripts]
+ram-experiments = "ram_experiments.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/abelalv/energia-2"
+Repository = "https://github.com/abelalv/energia-2"
+Issues = "https://github.com/abelalv/energia-2/issues"
+
+[build-system]
+requires = ["uv_build>=0.12.2,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "ram_experiments"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=3.7",
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "cvxpy>=1.5",
+]
+notebooks = [
+    "ipykernel>=6.29",
+    "nbstripout>=0.7",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["mathematical_checks", "historical_reference", "manuscript", "kaggle"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "C4"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ram_experiments"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

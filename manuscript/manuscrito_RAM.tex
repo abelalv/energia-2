@@ -1,0 +1,73 @@
+%% Revised working manuscript for Results in Applied Mathematics.
+%% Historical sources and results are preserved outside this revision.
+\documentclass[a4paper,fleqn]{cas-sc}
+\usepackage[super,sort&compress]{natbib}
+\usepackage{amsmath,amssymb,amsthm,mathtools,booktabs,tabularx}
+\usepackage{algorithm,algpseudocode}
+\usepackage{hyperref}
+\hypersetup{hypertexnames=false}
+% CAS 2.4 prints an empty ORCID footnote when identifiers are not supplied.
+\renewcommand{\printorcid}{}
+% Preserve the keyword layout with a deliberate, non-overfull overlay.
+\ExplSyntaxOn
+\RenewDocumentEnvironment{Abstract}{o}
+{
+  \group_begin:
+  \IfNoValueTF{#1}{}{\tex_gdef:D\abstractname{#1}}
+  \parindent0pt
+  \box_if_empty:NTF\g_stm_key_box
+    {\leftskip=.35\textwidth}
+    {
+      \dim_set:Nn\l_tmpa_dim{\box_ht:N\g_stm_key_box+\box_dp:N\g_stm_key_box}
+      \leftskip=.35\textwidth
+      \hspace*{-.35\textwidth}
+      \noindent\hbox_to_wd:nn{0pt}{\box\g_stm_key_box\hss}
+      \skip_vertical:n{-\l_tmpa_dim}
+    }
+  \noindent\abstractname\par
+  \skip_vertical:n{-4pt}
+  \noindent\rule{.65\textwidth}{.2pt}\par\footnotesize
+  \ignorespaces\everypar{\parindent=1.5em}
+}{\par\group_end:}
+\ExplSyntaxOff
+\newcommand{\R}{\mathbb R}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\ip}[2]{\left\langle#1,#2\right\rangle}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\dist}{dist}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+\begin{document}
+\let\WriteBookmarks\relax
+\shorttitle{Graph energy bounds and nuclear-norm budgets}
+\shortauthors{C. Ram\'irez Ovalle et al.}
+\title[mode=title]{Graph Energy Bounds and Global Nuclear-Norm Budgets in Fully Connected Neural Networks}
+\author[1]{Carlos Ram\'irez Ovalle}
+\cormark[1]
+\ead{carlosovalle@javerianacali.edu.co}
+\author[1]{Abel Alvarez}
+\ead{abel.alvarez@javerianacali.edu.co}
+\author[1]{Andr\'es J. Castrill\'on V\'asquez}
+\ead{ajcastrillon@javerianacali.edu.co}
+\affiliation[1]{organization={Pontificia Universidad Javeriana Cali},city={Cali},country={Colombia}}
+\cortext[1]{Corresponding author}
+\begin{abstract}
+The spectral energy of a layered neural-network graph and an additive nuclear-norm budget describe related but distinct quantities. For signed weights connecting consecutive layers, we prove that the nuclear norm of the full symmetric adjacency matrix lies between one half and one times the sum of the individual bipartite-block energies. A perturbation estimate yields a local square-root loss-gap bound under quadratic growth relative to a closed minimizer set, with strong convexity as a special case. We derive the Euclidean projection onto a global nuclear-norm budget through a common threshold on all layer singular values, and distinguish it from separate layer budgets, spectral-norm projection and spectral normalization. For a split constrained formulation, we establish finite-iteration feasibility bounds and, under explicit smoothness and projection assumptions, an a posteriori stationarity bound. These certificates do not imply convergence of stochastic nonconvex ADMM. Counterexamples delimit stronger claims about penalty gaps and spectral control. The mathematical statements are supported by small reproducible numerical checks. Historical neural-network experiments are retained as unaudited exploratory evidence; a controlled evaluation on MNIST and Fashion-MNIST, including projected stochastic gradient and matched-budget baselines, remains to be completed. The contribution is a precise connection between layered graph energy, parameter-space stability and verifiable spectral-budget diagnostics, rather than a new nuclear-norm optimization primitive or a demonstrated predictive advantage.
+\end{abstract}
+\begin{keywords}
+Graph energy \sep Nuclear norm \sep Quadratic growth \sep Euclidean projection \sep ADMM \sep Neural networks
+\end{keywords}
+\maketitle
+\noindent\textbf{Revision status.} Mathematical working revision for \emph{Results in Applied Mathematics}, 13 October 2026. The replacement neural-network evaluation and author approval of the declarations are pending. This document is not a submission-ready empirical report.
+\input{sections/01_foundations}
+\input{sections/02_optimization}
+\input{sections/03_evidence}
+\bibliographystyle{elsarticle-num}
+\bibliography{reference}
+\end{document}

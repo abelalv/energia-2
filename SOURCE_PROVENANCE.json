@@ -1,0 +1,21 @@
+{
+  "prepared_date": "2026-10-13",
+  "protocol": "RAM-2026-10-13-v1",
+  "audited_experimental_commit": "186e27400f94d551432759fa4830e0c114a2aa69",
+  "original_mathematical_script_sha256": "61c0eef7b39b2ad417d68693a024c89beb4adeea4dd143b50f0a60741bf2ae4d",
+  "handoff_mathematical_script_sha256": "6f32ed769da28623b43877969f69ef48512e30c8da76350376b70536abfcf3a2",
+  "script_changes": [
+    "English script name in the docstring",
+    "Generated output filename changed from resultados.json to current_results.json"
+  ],
+  "mathematical_algorithm_changed": false,
+  "training_implementation_included": false,
+  "source_documents_sha256": {
+    "ESPECIFICACION_MATEMATICA_IMPLEMENTACION.md": "0d869c987e2839f9fa8731438fd77a47d69b5ec2e56a6d96b84c3839439b8686",
+    "RUTA_EXPERIMENTAL_COLEGA.md": "c53297a341f0b04b20e4cae81a7d73a04637a4e87fdb1c9d8dfa75ca29249f86",
+    "MATRIZ_AFIRMACIONES_EVIDENCIA.md": "870e412bf16eebe9dc52b354b0917ca7faa04c759606f5797f0314f0f7172a41",
+    "AUDITORIA_MATEMATICA.md": "65a99a9e398cf5fefd3b7be493e7477f21e79ee2a7a7f9659fe6455c44429485",
+    "evidencia/REVISION_CODIGO_EXPERIMENTAL.md": "8565e00970914b89b789d34a823d945ab97c193e69ac64472513ab2deaa46c3a",
+    "PROMPT_COLEGA_EXPERIMENTOS.md": "a9f4f02ef880afbb3d540a10689a9f511b2a30b63d5bef626ebda576979217d7"
+  }
+}

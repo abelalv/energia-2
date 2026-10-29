@@ -1,0 +1,103 @@
+{
+  "alphas": [
+    0.6,
+    0.8,
+    1.0
+  ],
+  "architectures": {
+    "3L": [
+      784,
+      256,
+      128,
+      10
+    ],
+    "6L": [
+      784,
+      256,
+      128,
+      64,
+      64,
+      32,
+      10
+    ],
+    "9L": [
+      784,
+      256,
+      128,
+      128,
+      64,
+      64,
+      32,
+      32,
+      16,
+      10
+    ]
+  },
+  "datasets": [
+    "mnist",
+    "fashion_mnist"
+  ],
+  "methods": [
+    "STD",
+    "WD",
+    "NUC",
+    "SN",
+    "ADMM",
+    "PSGD-M"
+  ],
+  "nuc_grid": [
+    1e-05,
+    0.0001,
+    0.001,
+    0.01,
+    0.1
+  ],
+  "protocol": "RAM-2026-10-13-v1",
+  "seeds": [
+    42,
+    123,
+    456,
+    789,
+    1024
+  ],
+  "split_seed": 20261013,
+  "train": {
+    "admm_rho": 1.0,
+    "amp": false,
+    "batch_size": 64,
+    "dampening": 0.0,
+    "epochs": 25,
+    "eval_batch_size": 1024,
+    "lr": 0.01,
+    "momentum": 0.9,
+    "nesterov": false,
+    "precision": "float32",
+    "projection_device": "cpu",
+    "projection_dtype": "float64",
+    "projection_frequency": "minibatch_plus_epoch_entry",
+    "rho_balance": 10.0,
+    "rho_factor": 2.0,
+    "rho_max": 10.0,
+    "rho_min": 0.1,
+    "save_epochs": [
+      0,
+      3,
+      8,
+      15,
+      25
+    ],
+    "sn_eps": 1e-12,
+    "sn_n_power_iterations": 1,
+    "tf32": false,
+    "transition_epochs": 5,
+    "warmup_epochs": 3,
+    "weight_decay": 0.0
+  },
+  "wd_grid": [
+    1e-05,
+    0.0001,
+    0.001,
+    0.01,
+    0.1
+  ]
+}

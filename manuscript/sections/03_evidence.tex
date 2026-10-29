@@ -1,0 +1,77 @@
+\section{Verification, historical evidence and prospective evaluation}\label{sec:evidence}
+\subsection{Small mathematical checks completed in this revision}
+The accompanying script \texttt{comprobaciones/verificar\_matematica.py} executes only small CPU calculations in double precision. It does not load the training notebook or train a neural network. With NumPy 1.26.4, Python 3.11.8 and random seed 20261013, all 227 recorded checks passed. The complete machine-readable output and actual execution log accompany the revision. These checks exercise the formulas and counterexamples; the proofs above establish the mathematical claims.
+
+The checks include the path example $E=2\sqrt2$, $\Omega=4$; 100 small signed layered graphs satisfying~\eqref{eq:bilateral} within floating-point tolerances; joint-projection feasibility and idempotence for zero, positive, interior and repeated-spectrum cases; comparison of sorting, bisection and an independent constrained quadratic solver on the singular values; and spectral clipping versus rescaling. They also check the QG equality example and an explicit rank-deficient least-squares projection, 50 finite-feasibility instances, the full-space stationarity identity including bias gradients, the positive dual Lagrangian increment, both penalty and multiplier counterexamples, polynomial error accumulation, and ReLU rescaling. These are numerical checks with tolerances, not rigorous rounding-error enclosures or evidence of predictive superiority.
+
+\subsection{Status of the historical neural-network experiments}
+The previous manuscript reports MNIST experiments on three ReLU MLPs, listed in Table~\ref{tab:architectures}, and compares standard training, weight decay, nuclear penalization, spectral normalization and an ADMM variant. The original sources, PDF, figures and CSV files are preserved unchanged. Their outcomes are historical exploratory observations. Their previous interpretations as convergence proofs, validation of strong-convexity hypotheses, and exclusive ADMM feasibility guarantees are withdrawn.
+
+\begin{table}[htbp]
+\centering
+\caption{Architectures retained for the prospective evaluation. Biases are trainable. Width changes accompany depth changes, so these models do not isolate depth.}
+\label{tab:architectures}
+\begin{tabular}{llr}
+\toprule
+Name & Layer widths & Parameters \\
+\midrule
+3L & 784--256--128--10 & 235,146\\
+6L & 784--256--128--64--64--32--10 & 248,682\\
+9L & 784--256--128--128--64--64--32--32--16--10 & 266,618\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A static inspection of the public experimental repository at commit \texttt{186e27400f94} (full hash recorded in the audit) identified measurement and provenance issues. The spectral-normalization diagnostics iterate over named parameters, which can refer to original unconstrained parameters rather than effective forward-pass matrices; a separate spectral reconstruction also mismatches parametrized names. The historical curvature calculation selects the smallest positive Hessian eigenvalue, clips negative loss gaps, and uses thresholded perturbation ranks. These operations do not verify the hypotheses or constants of Theorem~\ref{thm:qg}. The projection utilities include fallbacks that replace failed SVDs by zeros, while warnings are globally suppressed. Budget satisfaction is counted using a one-percent allowance in parts of the notebook, rather than exact feasibility or the explicit tolerances proposed below. The quantity called validation uses samples from the official test partition. These issues prevent the existing summaries from serving as confirmatory evidence for the revised claims.
+
+Configurations are repeated across notebook experiments without run hashes establishing independence; the earlier count of twenty independent ADMM runs is unsupported. The original discussion mixes three-seed and five-seed summaries. The ADMM penalty adaptation rescales the dual by an assumed factor even when the penalty is clipped, rather than always using the actual ratio. In contrast, the inspected nuclear-penalty path uses differentiable tensor SVD values; the specific suspicion that this penalty necessarily loses its gradient through a CPU transfer is not supported by that code path. The evidence report records cell and line locations and separates observed defects from risks awaiting execution-level checks.
+
+Table~\ref{tab:historical} summarizes which historical material can be reused and which interpretations or measurements require replacement.
+\begin{table}[htbp]
+\caption{Disposition of historical evidence. Figure numbers refer to the old manuscript, not to new results.}
+\label{tab:historical}
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.19\linewidth}>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Historical material & Status & Required action \\
+\midrule
+Architectures and method definitions & Reusable after correcting conventions & Preserve shapes, seeds and provenance; specify objectives and effective weights.\\
+Figure 1 and curvature-based ratios & Invalid as validation of SC/QG & Replace with known minimizers and growth constants. A ratio above one is a failed check, not a vacuous bound.\\
+Figure 2 and residual summaries & Pending numerical audit; convergence interpretation invalid & Identify $W$ versus $Z$, budgets, tolerances and distinct runs. The plotted primal residual is not monotone.\\
+Figures 3--4 and accuracy tables & Pending measurement and split audit & Use independent validation/test splits, paired budgets and all-method feasibility reporting.\\
+Figure 5, single-seed layer allocation & Exploratory only; claimed annihilation mechanism invalid & Repeat across seeds; log spectra and gradients. A positive-radius single-layer projection does not annihilate a nonzero matrix.\\
+Figures 6--7 and SN spectral tables & SN measurement/interpretation invalid; other entries pending audit & Measure effective weights. Uniform scaling does not flatten normalized singular values.\\
+Timing and compression claims & Pending controlled measurement & Separate hardware effects and calibration costs; demonstrate stored-model compression if claimed.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+No corrected neural-network accuracy or timing numbers are substituted here. Reusing a historical number requires a traceable configuration, dataset split, checkpoint, matching effective weights and an independently recomputed metric. Preserving original files does not endorse their conclusions.
+
+\subsection{Prospective evaluation tied to the mathematical statements}
+The complete implementation specification, experimental route and claim-to-evidence matrix accompany this revision. They define seven stages, E0--E6. E0 must pass before training: test the full joint projection, an independent small optimization solver, spectral projection, factor-of-two conventions, effective SN weights, nuclear-penalty gradients and non-silent failure handling. E1 uses a strongly convex matrix quadratic and rank-deficient least squares with explicit optimal sets, projections and QG constants. It does not estimate a neural-network growth constant from a selected Hessian eigenvalue.
+
+E2 compares STD, WD, a nuclear penalty, joint ADMM and projected SGD with momentum on MNIST~\cite{lecun1998gradient} and Fashion-MNIST~\cite{Xiao2017FashionMNIST}, using Table~\ref{tab:architectures} and five predefined seeds $\{42,123,456,789,1024\}$. SN is retained only with correct effective-weight measurements. For each dataset, architecture and seed, one frozen standard-training reference defines $\tau=\alpha\Omega(W_{\rm STD,ref})$ with $\alpha\in\{0.6,0.8,1.0\}$. The two constrained methods alone require $2\times3\times3\times5\times2=180$ runs. References, WD/NUC calibration, SN and ablations add separate costs, deduplicated by configuration hashes. Hyperparameters use training and validation data, with the official test set reserved for final evaluation. A pilot measures cost before the principal run allocation is approved; no runtime or GPU configuration is assumed here.
+
+E3 records $\Omega(W)$, $\Omega(Z)$, current and final violations, primal and dual residuals, $\rho$ and projection frequency. The primary ADMM model is the actual $W$ iterate; $(Z,b)$ and $(\Pi_{C_\tau}(W),b)$ are separately labelled secondary models. Accuracy and spectral measurements always refer to the same weights. Exact projection makes $Z$ feasible, while Proposition~\ref{prop:feasibility} bounds possible violation of $W$. The smooth stationarity certificate is assessed only when its full-gradient and smoothness assumptions are justified. Warmup, budget transitions and fixed-budget phases are reported separately.
+
+E4 compares global projection with per-layer budgets proportional to parameter counts or reference nuclear norms, with an optional uniform allocation. The feasible sets differ. Several seeds, layer spectra, gradients and a longer-horizon or width-controlled diagnostic are required before attributing failures to depth or allocation. E5 checks $E(A)/\Omega$ on small graphs and selected checkpoints, treating $\Omega=0$ separately, and verifies ReLU rescaling without interpreting it as preservation of a weight-decayed objective. E6 measures total and component time on the same Linux/CUDA system, with synchronization and warmup. Actual storage and predictive effects of a factorized or truncated model are needed for any compression claim; effective rank alone is insufficient.
+
+Numerical feasibility uses a preregistered absolute-plus-relative tolerance, with raw violation retained. For E0 float64 checks the feasibility tolerance is $10^{-10}+10^{-10}\max(1,\tau)$. For the primary float32 training outputs, spectral measurements are reevaluated in float64 and feasibility uses $10^{-6}+10^{-5}\max(1,|\tau|)$. Any amendment must be justified through E0 before test evaluation. No NaN, failed SVD or failed training run is converted silently to a successful zero-energy result. Results include seed-level dispersion, paired differences, failures and retry histories. Standard deviation is not a confidence interval, and five seeds allow limited precision. The replicate is a run/seed, not an epoch or image.
+
+\section{Discussion and conclusions}\label{sec:conclusions}
+The revised analysis distinguishes the exact bipartite block identity, a two-sided comparison for the full consecutive-layer graph, and a local loss-gap bound for the additive surrogate under quadratic growth. The stability argument is a direct consequence of matrix-norm inequalities and the stated growth hypothesis. Its assumptions and direction are essential: a small spectral budget does not itself imply low loss, and equivalent ReLU parametrizations may have different budgets.
+
+A global nuclear-norm budget admits an exact common-threshold Euclidean projection. Separate layer budgets, spectral clipping, spectral normalization and nuclear penalization are distinct operations, each potentially useful for an appropriately specified objective. Projection guarantees feasibility of the point projected; it does not by itself prove convergence of a stochastic split algorithm or guarantee predictive quality.
+
+The finite-iteration residual certificate and conditional stationarity estimate provide diagnostics independent of an asymptotic convergence claim. The revised work establishes these statements in the main text and records small numerical checks. It does not establish convergence of the neural-network ADMM implementation, intrinsic functional complexity control, electrical-energy reduction or deployment compression.
+
+The essential neural-network evaluation remains pending. If ADMM outperforms matched-budget projected SGD with momentum and calibrated penalties under the specified protocol, that would support a bounded empirical advantage for those settings. Similar outcomes would support feasibility with comparable predictive performance. Worse accuracy, greater cost, depth-specific failures or feasibility confined to $Z$ must be reported with equal prominence. None changes the algebraic results, but each changes the admissible applied conclusion. A submission decision requires completed experimental evidence and author agreement on the contribution and declarations.
+
+\section*{Data and code availability}
+The historical repository is \url{https://github.com/cero1979/Ensayos-Energy-Graph}. The revision records a static snapshot and does not claim that its notebook currently reproduces every published table. The accompanying package contains mathematical checks, an execution log, audit, implementation specification and prospective protocol. A versioned archive of corrected experimental code, configurations, raw metrics, data-split hashes and checkpoints remains to be prepared by the experimental collaborator before submission. No new training results were generated for this revision.
+
+\section*{Author declarations requiring confirmation}
+The original manuscript lists Carlos Ram\'irez Ovalle, Abel Alvarez and Andr\'es J. Castrill\'on V\'asquez at Pontificia Universidad Javeriana Cali. Names, affiliations, contributions, funding, acknowledgments and competing interests require confirmation by all authors. The full postal address of the affiliation must be supplied and verified for the title page before submission. The former draft's broad equal-contribution statement has not been treated as newly verified. No editorial submission or author approval is implied by this revision.
+
+\section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}
+\textit{Proposed disclosure, pending author review and approval.} During the preparation of this revision, the authors used OpenAI Codex to assist with mathematical auditing, drafting and restructuring proofs, checking small numerical examples, reviewing code statically, preparing an experimental specification, verifying bibliographic information and revising English text. The authors must review and verify the mathematical arguments, code-related observations, references and final text before submission, edit the material as needed, and take full responsibility for the content. This proposed statement describes substantive assistance and does not limit it to language correction.

@@ -1,0 +1,1589 @@
+%%
+%% Elsevier CAS Single Column Template
+%% Journal of Computational Mathematics and Data Science
+%%
+\documentclass[a4paper,fleqn]{cas-sc}
+\usepackage{fix-cm}
+
+\usepackage[numbers]{natbib}
+
+%%%% Paquetes
+\usepackage{graphicx}
+\graphicspath{{results/}{figs/}{./}}
+\usepackage{multirow}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsthm}
+
+\usepackage{mathrsfs}
+
+% Silence harmless font/float warnings from the class + mathrsfs
+\usepackage{silence}
+\WarningFilter{latex}{Font shape `U/rsfs/m/n' in size}
+\WarningFilter{latex}{Size substitutions with differences}
+\WarningFilter{latex}{No positions in optional float specifier}
+
+% Fix duplicate PDF destinations produced by hyperref + cas-sc class
+\usepackage{hyperref}
+\hypersetup{hypertexnames=false}
+
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage{tikz}
+\usetikzlibrary{positioning, decorations.pathreplacing, arrows.meta, calc, shapes.geometric, fit}
+\usepackage{enumitem}
+
+%%%% Comandos personalizados
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\trace}{\mathrm{tr}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\dist}{dist}
+
+%%%% Teoremas
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+\theoremstyle{definition}
+\newtheorem{assumption}{Assumption}
+
+\begin{document}
+\let\WriteBookmarks\relax
+
+% Float placement tuning (avoid trapping large figures in the float queue)
+\renewcommand{\floatpagefraction}{.8}
+\renewcommand{\textfraction}{.1}
+\renewcommand{\topfraction}{.9}
+\renewcommand{\bottomfraction}{.8}
+
+\shorttitle{ Graph Energy and Nuclear-Norm Budgeting in Fully Connected NNs}
+\shortauthors{C. Ramirez Ovalle et~al.}
+
+\title[mode = title]{Graph Energy and Nuclear-Norm Budgeting in Fully Connected Neural Networks}
+\author[1]{Carlos. Ramirez Ovalle}
+\cormark[1]
+\ead{carlosovalle@javerianacali.edu.co}
+\credit{Conceptualization, Methodology, Software, Writing -- Original draft}
+
+\author[1]{Abel Alvarez}
+\ead{abel.alvarez@javerianacali.edu.co}
+\credit{Supervision, Writing -- Review \& Editing}
+
+\author[1]{Andr\'es J. Castrillón V\'asquez}
+\ead{ajcastrillon@javerianacali.edu.co}
+\credit{Validation, Writing -- Review \& Editing}
+
+\affiliation[1]{organization={Pontificia Universidad Javeriana Cali},
+                city={Cali},
+                country={Colombia}}
+
+%\affiliation[2]{organization={Instituci\'on Universitaria Antonio Jos\'e Camacho},
+               % city={Cali},
+                %country={Colombia}}
+
+\cortext[1]{Corresponding author}
+
+\begin{abstract}
+We associate a bipartite graph with each weight matrix of a fully connected multilayer perceptron and show that its graph energy equals twice the nuclear norm. Building on this identification, we prove local stability bounds for the surrogate energy around a minimizer, under strong convexity and quadratic-growth assumptions. These stability bounds motivate a constrained training framework in which the total nuclear-norm budget $\tau$ is enforced via ADMM with a nuclear-norm projection step. We show that the coupled constraint $\sum_\ell\|W_\ell\|_*\le\tau/2$ must be solved \emph{jointly} across layers---through a single soft-thresholding parameter found by bisection---rather than decomposed per layer, which provably starves narrow layers in deep networks. Experiments on MNIST with three MLP architectures (3, 6, and 9 weight layers) compare five training strategies---standard SGD, weight decay, soft nuclear penalty, spectral normalization, and ADMM---across five random seeds. Results show that (i) the ADMM algorithm converges to full constraint satisfaction in all 20 runs with zero violation, a guarantee that no other method can provide; (ii) accuracy remains competitive with weight decay for shallow architectures ($\Delta \le 0.5\%$ at 3 layers) while deeper networks exhibit a measurable trade-off between strict constraint enforcement and predictive performance; (iii) spectral normalization, despite constraining $\sigma_{\max}$ per layer, fails to reduce total graph energy and suffers catastrophic accuracy loss at depth; and (iv) the per-layer projection collapses to chance-level accuracy at depth $\ge 6$, whereas the joint projection preserves accuracy across all depths.
+\end{abstract}
+
+\begin{highlights}
+\item Graph energy of a neural network equals twice the sum of layer-wise nuclear norms, bridging spectral graph theory and deep learning regularization.
+\item Energy--loss stability bounds under strong convexity and quadratic growth provide rigorous certificates for the spectral complexity of trained networks.
+\item ADMM with joint nuclear-norm projection achieves zero final budget violation in all 20 ADMM runs reported in Experiments~2--3, a property not observed for the other tested methods.
+\item Per-layer projection collapses at depth $\ge 6$; the proposed global bisection-based projection preserves accuracy across all depths tested.
+\item Spectral normalization fails to reduce total graph energy and suffers catastrophic accuracy loss at depth, confirming the nuclear--spectral norm distinction.
+\end{highlights}
+
+\begin{keywords}
+Graph energy \sep Nuclear norm \sep Spectral regularization \sep ADMM \sep Constrained training \sep Neural network compression
+\end{keywords}
+
+
+
+\phantomsection
+\maketitle
+
+% DEBUG (uncomment to test graphics inclusion)
+%\begin{center}\includegraphics[width=1cm]{thumbnails/cas-url.jpeg}\end{center}
+\section{Introduction and Motivation}\label{sec:intro}
+
+A fully connected neural network defines a natural weighted graph: neurons are vertices and trained weights are edge values. The \emph{graph energy} of this structure---classically defined as $E(G)=\sum_i|\lambda_i(A)|$ for an adjacency matrix $A$~\cite{Gutman1978,Gutman2012}---provides a spectral measure of connectivity strength that encodes, in a single scalar, the aggregate singular-value content of the weight matrices across layers. Yet, despite the rich algebraic theory surrounding graph energy and its variants (Laplacian energy~\cite{GutmanZhou2006}, distance energy~\cite{Indulal2008DistanceEnergy}, Randi\'c energy~\cite{Bozkurt2010RandicEnergy}), its role as a \emph{quantitative} descriptor of neural network complexity during training has remained unexplored.
+
+Two separate lines of work motivate this investigation. On the \emph{structural} side, recent studies demonstrate that the topology of the graph induced by a neural architecture strongly influences predictive performance~\cite{you2020graph} and generalization~\cite{arya2025effects}, while energy-based functionals have been used to quantify uncertainty and information flow in graph neural networks~\cite{Acharya2025GraphEnergy,Fuchsgruber2024GEBM}. On the \emph{optimization} side, a rich body of theory connects the loss landscape geometry---strong convexity, quadratic growth (QG), Polyak--{\L}ojasiewicz (PL) inequalities---to convergence and stability guarantees~\cite{Nesterov2004,Karimi2016QGPL,Attouch2013KL,Martens2020}. However, these results are typically formulated in terms of the parameter-vector norm, leaving the layer-wise spectral structure of the weights largely unaddressed. In parallel, a growing body of applied work seeks to compress or prune networks under explicit budgets on FLOPs, memory, or hardware power consumption~\cite{Yang2019ECC,Chen2018ConstraintAware,Zeng2023DepthEnergy}, but without a principled spectral characterization linking budget levels to loss guarantees.
+
+This paper bridges these directions. We model a dense feedforward network as a weighted bipartite graph whose block-structured adjacency matrix has eigenvalues and singular values that encode inter-layer information flow. We show that the adjacency-based graph energy coincides with twice the sum of nuclear norms of the weight matrices, and that this identification leads to \emph{tractable stability bounds} linking perturbations of the energy to the training loss gap. These bounds, in turn, motivate a constrained training framework in which the total nuclear-norm budget is enforced as a hard optimization constraint via ADMM, producing networks that operate within a prescribed spectral envelope.
+
+Concretely, our main contributions are:
+\begin{itemize}
+	\item \textbf{Spectral characterization of the parameter graph.}
+	We formalize the bipartite parameter graph associated with a fully connected network and show that its graph energy is bounded by the sum of nuclear norms of the layer matrices; see inequality~\eqref{eq_full_2}. This connects classical spectral graph theory~\cite{Gutman2012,GutmanZhou2012} to standard matrix norms in numerical linear algebra~\cite{golub2013matrix,HornJohnson2012,Bhatia1997}, yielding a simple, additive, layer-wise measure of structural complexity.
+	
+	\item \textbf{Energy--loss stability bounds under SC and QG.}
+	Under local strong convexity and, more generally, under the Quadratic Growth condition, we prove that variations of graph energy are $\frac{1}{2}$-H\"older continuous with respect to the loss gap, with a constant that depends only on the layer-wise ranks of the weight perturbations (Theorems~\ref{thm:main} and~\ref{thm:qg}). In other words, keeping the loss small automatically keeps the graph energy close to its optimal value, providing a rigorous stability certificate for the spectral complexity of the network.
+	
+	\item \textbf{Energy-budgeted training via ADMM.}
+	Motivated by these bounds, we introduce an explicit energy budget $\Omega_{\text{energy}}(\theta)\le\tau$ as a hard constraint in the training problem~\eqref{prob:budget}. We solve it with an ADMM scheme that alternates standard loss minimization with projections onto the nuclear-norm ball, leveraging classical results on unitarily invariant norm projections~\cite{Watson1992Subdiff,Duchi2008L1proj,Cai2010SVT} and modern nonconvex ADMM theory~\cite{Boyd2011ADMM,HongLuoRazaviyayn2016ADMM,WangYinZeng2019ADMM}. The resulting algorithm is compatible with standard deep-learning toolchains and preserves the SGD training pipeline.
+	
+	\item \textbf{Joint projection and scalability to deep networks.}
+	We demonstrate, both theoretically and experimentally, that the coupled constraint $\sum_\ell\|W_\ell\|_*\le\tau/2$ must be enforced \emph{globally} through a single Lagrange multiplier found by bisection, rather than decomposed proportionally per layer. The per-layer approach catastrophically fails at depth $\ge 6$ layers (collapsing to chance-level accuracy of $\sim$10\%), while the joint projection preserves accuracy across all three depths tested.
+	
+	\item \textbf{Hard constraint satisfaction as the distinguishing property.}
+	The ADMM-based method achieves zero energy-budget violation in all 20 ADMM runs considered in this work (5 runs in the dedicated convergence experiment and 15 runs in the multi-depth comparison), a guarantee that no other tested method---weight decay, soft nuclear-norm penalty, or spectral normalization---can provide (the latter two satisfy the budget in $1/15$ and $0/15$ runs, respectively). This property is especially relevant for applications requiring certified spectral complexity bounds.
+\end{itemize}
+
+
+We emphasize that this work is primarily a \emph{theoretical contribution}---establishing the graph-energy--nuclear-norm connection, proving the stability bounds, and deriving the ADMM algorithm with convergence guarantees---accompanied by a systematic experimental validation. The experiments are designed to verify the theoretical predictions in controlled settings, not to compete on benchmark leaderboards. From an applied perspective, these results provide a principled way to reason about how far a trained network can drift, in spectral terms, when subject to perturbations or additional optimization steps, and how to enforce explicit constraints on this drift during training.
+These bounds should be interpreted as local structural certificates rather than as a global description of cross-entropy training dynamics in deep non-convex models.
+
+In the numerical experiments (Section~\ref{sec:experiments}), we instantiate $\mathcal{L}_{\text{data}}$ as the standard cross-entropy loss on MNIST and compare five training strategies---standard SGD, weight decay, a soft nuclear-norm penalty, spectral normalization~\cite{Miyato2018SpectralNorm}, and ADMM with hard energy constraints---across three fully connected architectures of increasing depth (3, 6, and 9 weight layers). The ADMM method is the only one that achieves certified constraint satisfaction in all configurations, while maintaining competitive accuracy for shallow architectures and revealing the inherent cost of strict constraint enforcement at greater depth.
+
+\paragraph{Relation to spectral normalization.}
+The most closely related regularization technique in the deep learning literature is \emph{spectral normalization}~\cite{Miyato2018SpectralNorm}, which constrains the spectral norm $\|W_\ell\|_2=\sigma_{\max}(W_\ell)$ of each weight matrix---the largest singular value---to stabilize GAN training. Our approach differs in three fundamental ways. First, the nuclear norm $\|W_\ell\|_*=\sum_j\sigma_j$ captures the \emph{entire} singular spectrum, whereas spectral normalization controls only its maximum. Second, spectral normalization enforces a per-layer constraint with no inter-layer coupling, while our formulation imposes a \emph{global} budget $\sum_\ell\|W_\ell\|_*\le\tau/2$ that balances spectral complexity across layers jointly. Third, our constraint is motivated by an explicit stability theorem (Theorems~\ref{thm:main} and~\ref{thm:qg}) relating energy perturbations to loss gaps, providing a rigorous justification rather than an empirical heuristic. Weight decay~\cite{Krogh1991WeightDecay} penalizes the Frobenius norm $\|W_\ell\|_F$, which is insensitive to the distribution of singular values and cannot certify any bound on the nuclear norm or graph energy.
+
+The remainder of the paper is organized as follows. Section~\ref{sec:graph_energy} establishes the graph-energy--nuclear-norm equivalence. Section~\ref{sec:relation} derives the energy--loss stability bounds. Section~\ref{sec:qg} extends these bounds to the QG setting. Section~\ref{sec:energy_budget} develops the ADMM-based constrained training algorithm. Section~\ref{sec:experiments} presents the experimental validation, and Section~\ref{sec:conclusions} concludes.
+%% SECCIÓN: Graph Energy (Contenido de sections/graph_energy.tex)
+
+\section{Graph Energy and Nuclear Norm in Deep Networks}\label{sec:graph_energy}
+
+Consider a fully connected neural network with $m$ weight layers, represented by matrices $W^{(1)},\dots,W^{(m)}$ between $m+1$ neuron layers.
+ The network can be represented as a graph in which each neuron corresponds to a vertex, and each connection between neurons is associated with a weight $W_{i,j}^{(l)}$ between layers $l$ and $l+1$. 
+
+This graph is bipartite in its local structure, meaning that its set of vertices can be partitioned into subsets such that edges only connect distinct layers. In this formulation, the network structure can be represented by a suitably defined adjacency matrix $A$.
+
+\begin{equation}\label{eq_ad}
+    A=\begin{bmatrix}
+     0&W^{(1)}&\\
+     (W^{(1)})^\top&0&W^{(2)}\\
+     &(W^{(2)})^\top&0&W^{(3)}\\
+     &&(W^{(3)})^\top&0\\
+     &&&&\ddots\\
+     &&&&&W^{(N)}\\
+     &&&&(W^{(N)})^\top&0
+    \end{bmatrix}.
+\end{equation}
+The matrix $A$ is symmetric. We begin by decomposing the adjacency matrix \eqref{eq_ad} as a sum of extended bipartite adjacency matrices:
+\begin{equation}\label{eq_full}
+A = \sum_{l=1}^{N-1} \widetilde{B}_l,    
+\end{equation}
+where each $\widetilde{B}_l$ contains the block matrix $B_l$ embedded in the larger dimensions, defined as:
+\begin{equation}\label{eq_BL}
+B_l = \begin{pmatrix} 0 & W^{(l)} \\ (W^{(l)})^\top & 0 \end{pmatrix}.
+\end{equation}
+The nuclear norm is given by $\|B_l\|_* = \sum_{j=1}^{\tilde{r}}\tilde{\sigma}_j$, where $\tilde{\sigma}_j$ are the singular values. Using SVD factorization $W^{(l)}=U^{(l)}\Sigma^{(l)} (V^{(l)})^\top$, we can analyze the square of the block matrix:
+\begin{equation}
+B_l^\top B_l = 
+\begin{pmatrix} 
+U^{(l)} & 0 \\ 
+0 & V^{(l)} 
+\end{pmatrix}
+\begin{pmatrix} 
+\Sigma^{(l)}(\Sigma^{(l)})^\top & 0 \\ 
+ 0 & (\Sigma^{(l)})^\top\Sigma^{(l)} 
+\end{pmatrix}
+\begin{pmatrix} 
+(U^{(l)})^\top & 0 \\ 
+0 & (V^{(l)})^\top 
+\end{pmatrix}.
+\end{equation}
+From this, we conclude that the singular values of $B_l$ are simply two copies of the singular values of $W^{(l)}$. Thus:
+\begin{equation}\label{eq_BL_norm}
+\|B_l\|_* = 2\|W^{(l)}\|_*.
+\end{equation}
+Using \eqref{eq_BL_norm} and the triangle inequality on \eqref{eq_full}, we obtain:
+\begin{equation}\label{eq_full_2}
+\|A\|_* \leq \sum_{l=1}^{N-1} \|\widetilde{B}_l\|_* = 2\sum_{l=1}^{N-1} \|W^{(l)}\|_*.    
+\end{equation}
+
+We define the \textbf{energy of a graph} $E(G)$ as the sum of the absolute values of the eigenvalues of its adjacency matrix. Since $A$ is symmetric, the sum of absolute eigenvalues is identical to the nuclear norm $\|A\|_*$.
+
+Thus, the exact identity holds at the level of each layer-wise bipartite block:
+\[
+E(B_l)=\|B_l\|_*=2\|W^{(l)}\|_*.
+\]
+For the full network adjacency matrix $A$, we obtain the upper bound
+\[
+E(A)=\|A\|_* \le 2\sum_{l=1}^{m}\|W^{(l)}\|_*.
+\]
+Motivated by this additive upper bound, we define the parameter graph energy surrogate
+\[
+\Omega_{\text{energy}}(W):=2\sum_{l=1}^{m}\|W^{(l)}\|_*,
+\]
+which is the quantity constrained in the optimization framework below.
+%
+\section{Relation of Graph Energy with Loss Function}\label{sec:relation}
+
+We now establish a relationship between the neural network's loss function stability and the energy of its graph. 
+
+Consider a loss function $\mathcal{L}(\bm{W})$ that has a local minimum at $\bm{W}^*$. We assume $\mathcal{L}$ is \textbf{locally strongly convex} (or has quadratic growth) in a neighborhood $\mathcal{U}$ around $\bm{W}^*$:
+\begin{equation}\label{h1}
+\mathcal{L}(\bm{W})-\mathcal{L}(\bm{W}^*) \;\ge\; \frac{\mu}{2}\,\|\theta-\theta^*\|_2^2,\qquad \forall \bm{W}\in\mathcal{U},
+\end{equation}
+where $\mu>0$ is the convexity constant and $\theta = \mathrm{vec}(\bm{W})$ is the vectorized parameter set.
+
+Let the perturbation of the weights be defined as $\Delta \bm{W}^{(l)} = \bm{W}^{(l)} - \bm{W}^{(l)*}$. By the definition of the Frobenius norm and vectorization, we have:
+\begin{equation}\label{eq_f_v}
+\sum_{l=1}^{N-1} \|\Delta \bm{W}^{(l)}\|_F^2 \;=\; \|\theta-\theta^*\|_2^2.
+\end{equation}
+
+\begin{lemma}[Nuclear--Frobenius relation]\label{lem:nuclear-fro}
+Let $M$ be a matrix of rank $r$. Then
+\[
+\|M\|_* \;\le\; \sqrt{r}\,\|M\|_F.
+\]
+\end{lemma}
+
+\begin{lemma}[Layer-wise Frobenius--vectorization]\label{lem:fro-stack}
+Let $W=(W^{(1)},\dots,W^{(m)})$ be the collection of layer matrices and $\theta = \mathrm{vec}(W)$ their stacked vectorization. Then
+\[
+\sum_{l=1}^m \|W^{(l)}\|_F^2 \;=\; \|\theta\|_2^2.
+\]
+\end{lemma}
+
+\begin{lemma}[Cauchy--Schwarz across layers]\label{lem:cs-layers}
+For nonnegative numbers $a_l,b_l$,
+\[
+\sum_{l=1}^m a_l b_l \;\le\; \sqrt{\sum_{l=1}^m a_l^2}\;\sqrt{\sum_{l=1}^m b_l^2}.
+\]
+\end{lemma}
+
+\begin{theorem}[Surrogate Energy--Loss Bound]\label{thm:main}
+Let the loss function $\mathcal{L}$ be locally strongly convex with a minimum $\bm{W}^*\in \mathcal{U}$. Then, for all $\bm{W}\in \mathcal{U}$:
+\[
+\bigl|\Omega_{\text{energy}}(\bm{W})-\Omega_{\text{energy}}(\bm{W}^*)\bigr|
+\le
+2\sqrt{\frac{2R}{\mu}}\,
+\sqrt{\mathcal{L}(\bm{W})-\mathcal{L}(\bm{W}^*)}.
+\]
+\end{theorem}
+
+\begin{proof}
+
+By definition,
+\[
+\Omega_{\text{energy}}(\bm{W})=2\sum_{l=1}^{m}\|W^{(l)}\|_*.
+\]
+Therefore, by the reverse triangle inequality,
+\[
+\bigl|\Omega_{\text{energy}}(\bm{W})-\Omega_{\text{energy}}(\bm{W}^*)\bigr|
+\le
+2\sum_{l=1}^{m}\|\Delta W^{(l)}\|_*.
+\]
+
+Using the decomposition from Eq.~\eqref{eq_full} applied to $A - A^*$ and the analogue of \eqref{eq_full_2}, we obtain
+\begin{equation}\label{eq_step1}
+\|A - A^*\|_* \le 2 \sum_{l=1}^{N-1} \|\Delta \bm{W}^{(l)}\|_*.
+\end{equation}
+By Lemma~\ref{lem:nuclear-fro},
+\begin{equation}\label{eq_step2}
+2 \sum_{l=1}^{N-1} \|\Delta \bm{W}^{(l)}\|_* \le 2 \sum_{l=1}^{N-1} \sqrt{r_l} \, \|\Delta \bm{W}^{(l)}\|_F.
+\end{equation}
+Applying Cauchy--Schwarz (Lemma~\ref{lem:cs-layers}) with $a_l = \sqrt{r_l}$ and $b_l = \|\Delta \bm{W}^{(l)}\|_F$,
+\begin{equation}\label{eq_step3}
+\sum_{l=1}^{N-1} \sqrt{r_l} \, \|\Delta \bm{W}^{(l)}\|_F \le \sqrt{\sum_{l=1}^{N-1} r_l} \; \sqrt{\sum_{l=1}^{N-1} \|\Delta \bm{W}^{(l)}\|_F^2}.
+\end{equation}
+Let $R = \sum r_l$. Using Lemma~\ref{lem:fro-stack} and Eq.~\eqref{eq_f_v}, we get
+\[
+\sum_{l=1}^{N-1} \sqrt{r_l} \, \|\Delta \bm{W}^{(l)}\|_F \le \sqrt{R} \, \|\theta - \theta^*\|_2.
+\]
+Combining \eqref{eq_step1}, \eqref{eq_step2}, and the above inequality,
+\begin{equation}
+\bigl|E(\bm{W})-E(\bm{W}^*)\bigr| \le 2\sqrt{R} \, \|\theta - \theta^*\|_2.
+\end{equation}
+Finally, by strong convexity \eqref{h1},
+\[
+\|\theta - \theta^*\|_2 \le \sqrt{\frac{2}{\mu}\left(\mathcal{L}(\bm{W})-\mathcal{L}(\bm{W}^*)\right)}.
+\]
+Substituting this yields the claimed bound.
+\end{proof}
+
+\begin{remark}
+Theorem~\ref{thm:main} shows that, in a neighborhood of a (locally) strongly convex minimum, the deviation of the network's graph energy behaves at most like the \emph{square root} of the loss gap. In other words, as the training loss approaches its minimum, the energy of the parameter graph becomes rigid: it cannot fluctuate arbitrarily without incurring a comparable increase in loss. This provides a stability certificate for the spectral complexity of the network around well-trained solutions.
+\end{remark}
+
+
+%% SECCIÓN: Stability (Contenido de sections/stability.tex)
+
+\section{Stability Variant under Quadratic Growth (QG) and Complete Proof}
+\label{sec:qg}
+
+We now relax local strong convexity to a more general \emph{Quadratic Growth} (QG) condition, which allows for multiple minimizers and does not require a positive-definite Hessian at a single point.
+
+Let $\Theta=\mathbb{R}^P$ be the space of vectorized parameters $\theta=\mathrm{vec}(W)$ and
+\[
+\Theta^* \;=\; \arg\min_{\theta\in\Theta}\,\mathcal{L}(\theta)
+\]
+the (possibly non-singleton) set of minimizers of the regularized objective. For any $\theta\in\Theta$, we denote
+\[
+\mathrm{dist}(\theta,\Theta^*) \;:=\; \inf_{\xi\in\Theta^*}\|\theta-\xi\|_2,
+\qquad
+\theta^+ \in \operatorname*{arg\,min}_{\xi\in\Theta^*}\|\theta-\xi\|_2
+\]
+a Euclidean projection of $\theta$ onto $\Theta^*$ whenever it exists.
+
+\begin{assumption}[Local Quadratic Growth (QG) on an identifiable neighborhood]\label{hyp:QG}
+There exists a neighborhood $\mathcal{U}\subset\Theta$ of the set $\Theta^*$ and a constant $\gamma>0$ such that
+\[
+\mathcal{L}(\theta)-\mathcal{L}(\theta^*) \;\ge\; \frac{\gamma}{2}\,\mathrm{dist}(\theta,\Theta^*)^2,
+\qquad \forall\,\theta\in\mathcal{U},\ \forall\,\theta^*\in\Theta^*.
+\]
+Equivalently, letting $\theta^+=\Pi_{\Theta^*}(\theta)$ be a Euclidean projection, we have
+\[
+\mathcal{L}(\theta)-\mathcal{L}(\theta^+) \;\ge\; \tfrac{\gamma}{2}\|\theta-\theta^+\|_2^2
+\qquad \forall \theta\in\mathcal{U}.
+\]
+\end{assumption}
+
+\begin{remark}
+Assumption~\ref{hyp:QG} is strictly weaker than local strong convexity: if $\mathcal{L}$ is $\mu$-strongly convex on $\mathcal{U}$ (on an identifiable subspace), then it satisfies QG with $\gamma=\mu$. Importantly, QG does not require uniqueness of the minimizer or a globally positive-definite Hessian; it only enforces quadratic growth with respect to the \emph{set} $\Theta^*$ in the neighborhood considered.
+\end{remark}
+
+We define $W^+=\mathrm{mat}(\theta^+)$ as the projection of $W$ onto the set of minimizers, and layer-wise
+\[
+\Delta W^{(l)} \;=\; W^{(l)}-W^{(l)+}, \qquad
+r_l \;=\; \rank\!\bigl(\Delta W^{(l)}\bigr), \qquad
+R \;=\; \sum_{l=1}^m r_l.
+\]
+Recall that $E(W)=2\sum_{l=1}^m \|W^{(l)}\|_*$.
+
+\begin{theorem}[Energy–Loss Bound under QG]\label{thm:qg}
+Under Assumption~\ref{hyp:QG}, for all $W$ such that $\theta=\mathrm{vec}(W)\in\mathcal{U}$ and with $W^+$ a Euclidean projection onto the set of minimizers,
+\[
+\boxed{\quad
+\bigl|E(W)-E(W^+)\bigr|
+\;\le\;
+2\sqrt{\tfrac{2R}{\gamma}}\;\sqrt{\mathcal{L}(W)-\mathcal{L}(W^+)}\;.
+\quad}
+\]
+In particular, if the minimizer is unique ($\Theta^*=\{\theta^*\}$), then $W^+=W^*$ and the original bound is recovered by substituting $\gamma$ for $\mu$.
+\end{theorem}
+
+\begin{proof}
+The argument mirrors the strongly convex case but replaces the distance to $W^*$ by the distance to the \emph{set} of minimizers.
+
+\emph{(i) Layer-wise decomposition and nuclear triangular inequality.}
+By $E(W)=2\sum_l \|W^{(l)}\|_*$ and the reverse triangle inequality for $\|\cdot\|_*$,
+\[
+|E(W)-E(W^+)|
+=2\Bigl|\sum_l \|W^{(l)}\|_*-\sum_l \|W^{(l)+}\|_*\Bigr|
+\;\le\; 2\sum_{l=1}^m \bigl\|W^{(l)}-W^{(l)+}\bigr\|_*.
+\]
+
+\emph{(ii) Nuclear–Frobenius and Cauchy–Schwarz.}
+Applying Lemma~\ref{lem:nuclear-fro} to each layer and then Lemma~\ref{lem:cs-layers} with $a_l=\sqrt{r_l}$, $b_l=\|\Delta W^{(l)}\|_F$,
+\[
+2\sum_{l=1}^m \bigl\|W^{(l)}-W^{(l)+}\bigr\|_*
+\;\le\; 2\sum_l \sqrt{r_l}\,\|\Delta W^{(l)}\|_F
+\;\le\; 2\sqrt{R}\,\sqrt{\sum_l \|\Delta W^{(l)}\|_F^2}.
+\]
+
+\emph{(iii) Frobenius–vectorization equivalence.}
+By Lemma~\ref{lem:fro-stack},
+\[
+\sum_{l=1}^m \|\Delta W^{(l)}\|_F^2 \;=\; \|\theta-\theta^+\|_2^2.
+\]
+
+\emph{(iv) Quadratic growth.}
+Assumption~\ref{hyp:QG} implies, for $\theta\in\mathcal{U}$,
+\[
+\mathcal{L}(\theta)-\mathcal{L}(\theta^+)
+\;\ge\; \frac{\gamma}{2}\,\|\theta-\theta^+\|_2^2
+\quad\Longrightarrow\quad
+\|\theta-\theta^+\|_2 \;\le\; \sqrt{\tfrac{2}{\gamma}}\;\sqrt{\mathcal{L}(\theta)-\mathcal{L}(\theta^+)}.
+\]
+
+\emph{(v) Putting everything together.}
+Substituting (iii)–(iv) into (ii),
+\[
+|E(W)-E(W^+)|
+\;\le\; 2\sqrt{R}\,\|\theta-\theta^+\|_2
+\;\le\; 2\sqrt{R}\,\sqrt{\tfrac{2}{\gamma}}\;\sqrt{\mathcal{L}(W)-\mathcal{L}(W^+)}
+\;=\; 2\sqrt{\tfrac{2R}{\gamma}}\;\sqrt{\mathcal{L}(W)-\mathcal{L}(W^+)}.
+\]
+\end{proof}
+
+
+Let $E_{\min}=\inf\{E(U):\,U\in\Theta^*\}$. In general, $E(W^+)$ does not necessarily coincide with $E_{\min}$ (the energy may vary over $\Theta^*$). In this case, we obtain
+\[
+\begin{aligned}
+|E(W)-E_{\min}|
+&\le |E(W)-E(W^+)| + |E(W^+)-E_{\min}|\\
+&\le 2\sqrt{\tfrac{2R}{\gamma}}\,\sqrt{\mathcal{L}(W)-\mathcal{L}(W^+)} + |E(W^+)-E_{\min}|.
+\end{aligned}
+\]
+If the energy is constant on $\Theta^*$ (for instance, when the symmetries that generate multiple minimizers preserve the functional $E$), then $E(W^+)=E_{\min}$, and in this special case we recover a direct bound expressed solely in terms of $E_{\min}$.
+
+
+
+Simultaneous attainment of equality in all steps requires the following conditions: (i) all singular values of each $\Delta W^{(l)}$ must be identical (corresponding to the equality case in the nuclear–Frobenius norm inequality), (ii) the vectors $(\sqrt{r_l})_l$ and $(\|\Delta W^{(l)}\|_F)_l$ must be colinear (corresponding to the equality case in the layer-wise Cauchy–Schwarz inequality), and (iii) the loss function must satisfy the quadratic growth condition with constant $\gamma$ exactly along the line segment connecting $\theta$ and $\theta^+$. In practical scenarios, the bound therefore behaves as an \emph{upper envelope} in a neighborhood of the optimum.
+
+\begin{remark}[On bias terms and why we omit them]\label{rem:bias}
+Throughout the paper we focus on feedforward networks without explicit bias terms (or, equivalently, we treat the bias as not contributing to the graph-energy functional).
+This restriction is mainly for clarity: the graph representation and the associated energy used in our bounds are naturally expressed in terms of the inter-layer linear maps $W_\ell$, while bias vectors $b_\ell$ act as affine shifts.
+
+Importantly, the analysis can be extended to include biases with only minor technical modifications.
+Indeed, for a standard affine layer
+\[
+x_{\ell+1}=\sigma\!\bigl(W_\ell x_\ell + b_\ell\bigr),
+\]
+one may absorb the bias by augmenting the input with a constant coordinate:
+define $\tilde x_\ell := (x_\ell,1)$ and $\tilde W_\ell := [\,W_\ell\;\; b_\ell\,]$, so that
+\[
+W_\ell x_\ell + b_\ell \;=\; \tilde W_\ell \tilde x_\ell.
+\]
+Under this transformation, the same bipartite block construction applies to $\tilde W_\ell$.
+Moreover, the corresponding energy surrogate can be controlled via standard norm inequalities, e.g.
+\[
+\|\tilde W_\ell\|_* \;\le\; \|W_\ell\|_* + \|b_\ell\|_2,
+\]
+and for perturbations one has the rank bound
+\[
+\mathrm{rank}(\Delta \tilde W_\ell)\;\le\;\mathrm{rank}(\Delta W_\ell)+1.
+\]
+Consequently, the main energy--loss estimates remain valid after replacing
+$\sum_\ell \|W_\ell\|_*$ by $\sum_\ell(\|W_\ell\|_*+\|b_\ell\|_2)$ and adjusting the rank-dependent constants accordingly (at most by an additive factor of the number of layers).
+We therefore present the bias-free setting to keep the exposition and the graph/energy notation concise, without loss of generality in the qualitative conclusions.
+\end{remark}
+
+
+\begin{lemma}[Existence of minimizers and Euclidean projections onto $\Theta^*$]\label{lem:proj-exists}
+Let $\mathcal{L}(\theta)=\mathcal{L}_{\rm data}(\theta)+\tfrac{\lambda}{2}\|\theta\|_2^2$ with $\lambda>0$ and $\mathcal{L}_{\rm data}$ continuous.
+Define $\Theta^*=\arg\min_{\theta\in\mathbb{R}^P}\mathcal{L}(\theta)$. Then:
+\par\noindent\textup{(i)} $\mathcal{L}$ is coercive and continuous, hence $\Theta^*\neq\varnothing$ and $\Theta^*$ is compact (closed and bounded).\par\smallskip
+\noindent\textup{(ii)} For all $\theta\in\mathbb{R}^P$ there exists $\theta^+\in\Theta^*$ such that $\|\theta-\theta^+\|_2=\mathrm{dist}(\theta,\Theta^*)$; i.e., the Euclidean projection $\Pi_{\Theta^*}(\theta)$ is non-empty (and unique if $\Theta^*$ is convex).
+\end{lemma}
+
+\begin{proof}
+(i) Since $\mathcal{L}_{\rm data}(\theta)\ge 0$ (bounded below), the regularization term $\tfrac{\lambda}{2}\|\theta\|^2$ dominates as $\|\theta\|\to\infty$. Thus, $\mathcal{L}(\theta)\to\infty$ as $\|\theta\|\to\infty$, so $\mathcal{L}$ is coercive. Let $\alpha=\inf \mathcal{L}(\theta)$. The sublevel set $S=\{\theta:\mathcal{L}(\theta)\le \alpha+1\}$ is bounded (coercivity) and closed (continuity), hence compact. By Weierstrass' theorem, the minimum is attained on $S$, so $\Theta^*\neq\varnothing$ and is a closed subset of $S$, thus compact.
+
+(ii) For fixed $\theta$, the distance function $d(\xi)=\|\theta-\xi\|_2$ is continuous. Since $\Theta^*$ is compact, $d$ attains its minimum on $\Theta^*$, so the set of minimizers (projections) is non-empty.
+\end{proof}
+
+
+Lemma~\ref{lem:proj-exists} ensures that the “closest minimizer” $\theta^+ = \Pi_{\Theta^*}(\theta)$ is well-defined under standard $L^2$-regularization. Consequently, the QG-based energy–loss bound expressed in terms of $\mathrm{dist}(\theta,\Theta^*)$ remains valid even in the presence of non-unique minimizers: one can always select $W^+ = \mathrm{mat}(\theta^+)$ as a canonical reference element in the optimal set.
+
+Consequently, Theorems~\ref{thm:main} and~\ref{thm:qg} imply that controlling the graph energy is not merely a heuristic for regularization, but a necessary condition for certifying stability against loss perturbations. This theoretical insight exposes a limitation in standard training: while we want to bound the energy, standard methods only penalize it softly via regularization terms. This motivates a shift towards a constrained optimization perspective, which we develop in the next section.
+
+
+
+
+\section{Training with an Energy Budget}
+\label{sec:energy_budget}
+
+The effective capacity of a dense network is tightly linked to the \emph{spectral structure} of its linear layers. If each layer $W_\ell$ is represented as a bipartite parameter graph, the \emph{graph energy} of the block
+\[
+A_\ell = \begin{psmallmatrix} 0 & W_\ell\\ W_\ell^\top & 0\end{psmallmatrix}
+\]
+is exactly $E(A_\ell)=2\|W_\ell\|_\ast$ (Lemma~\ref{lem:bipartita-nuclear} below). This connects the classical literature on \emph{graph energy} \cite{Gutman2012,GutmanZhou2012} with rank-/nuclear-based notions of complexity in learning.
+
+The central conceptual contribution of this section is to treat the parameter graph energy as an \emph{explicitly budgeted resource} during training, rather than as an independent regularization term. Specifically, we propose to perform optimization \emph{subject to an energy budget}, by enforcing the constraint
+\[
+\Omega_{\text{energy}}(\theta)\le \tau
+\]
+while minimizing the empirical loss.
+\subsection{Parameter graph energy and constrained training}
+
+Consider a feed-forward dense network with $m$ layers, parameters $\theta=\{(W_\ell,b_\ell)\}_{\ell=1}^m$ and empirical loss $\mathcal{L}_{\text{data}}(\theta)$ (e.g., MSE or cross-entropy). Although the energy functional depends only on the weight matrices $W_\ell$; see Remark~\ref{rem:bias}.
+We define the \emph{parameter graph energy} as
+\begin{equation}
+  \Omega_{\text{energy}}(\theta)\;=\;2\sum_{\ell=1}^m \|W_\ell\|_{\ast},
+\end{equation}
+where $\|\cdot\|_{\ast}$ is the nuclear norm (sum of singular values).\footnote{The factor $2$ comes from the bipartite interpretation of the parameter graph energy and can be absorbed into the threshold $\tau$ without loss of generality.}
+
+\begin{lemma}[Bipartite energy $= 2\|W\|_\ast$]
+\label{lem:bipartita-nuclear}
+Let $A=\begin{psmallmatrix}0&W\\ W^\top&0\end{psmallmatrix}$ be the bipartite adjacency matrix associated with $W$. 
+Then the graph energy is
+\[
+E(A)=\sum_i |\lambda_i(A)| = 2\sum_j \sigma_j(W)=2\|W\|_\ast.
+\]
+\end{lemma}
+
+\begin{proof}
+Let $W = U \Sigma V^\top$ be the SVD of $W$, with singular values $\sigma_1,\dots,\sigma_r$. The eigenvalues of $A$ are $\{\pm \sigma_j(W)\}$ plus zeros corresponding to dimension mismatch; see, e.g., \cite[Ch.~3]{HornJohnson2012,Parlett1998}. Thus
+\[
+E(A)=\sum_i|\lambda_i(A)|=\sum_{j=1}^r(|\sigma_j|+|-\sigma_j|)=2\sum_{j=1}^r \sigma_j=2\|W\|_\ast.
+\]
+\end{proof}
+
+We formulate the \emph{energy-budgeted training problem} as
+\begin{equation}
+  \tag{$\mathbf{P}_\tau$}\label{prob:budget}
+  \min_{\theta}\;\;\mathcal{L}_{\text{data}}(\theta)
+  \quad\text{subject to}\quad
+  \Omega_{\text{energy}}(\theta)\;\le\;\tau.
+\end{equation}
+The constraint defines the feasible set
+\[
+  \mathcal{F}_\tau 
+    \;=\; 
+    \bigl\{ \theta : \Omega_{\text{energy}}(\theta) \le \tau \bigr\},
+\]
+so that training can be interpreted as searching for parameters that minimize loss \emph{within} a fixed energy budget. Any feasible solution of \eqref{prob:budget} guarantees by construction that the parameter graph energy does not exceed~$\tau$.
+
+
+Our formulation makes four main contributions:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Conceptual bridge:} We establish that the parameter graph energy can be expressed as a sum of layer-wise nuclear norms, $E=\sum_\ell 2\|W_\ell\|_\ast$, thereby providing a spectral characterization of network complexity that is not captured by conventional $\ell_2$ regularization.
+  \item \textbf{Constrained training (beyond penalization):} We adopt an explicit \emph{budget} formulation $(\mathbf{P}_\tau)$ and solve it using augmented Lagrangian / ADMM methods \cite{Rockafellar1976AugLag,Boyd2011ADMM,Bertsekas1999Nonlinear}, for which KL/PL-type convergence guarantees are available in non-convex settings \cite{Attouch2013KL,Polyak1963,Nesterov2004}. In practice, this yields a numerically stable training procedure that enforces control over the energy  and yields an empirical loss--energy trade-off across budgets. 
+  \item \textbf{Verifiable convergence criteria:} We derive the KKT conditions involving nuclear-norm subgradients \cite{Watson1992Subdiff} and introduce a set of diagnostic quantities (primal and dual residuals, budget violation, and a stationarity residual) that are naturally aligned with the proposed algorithm.
+  \item \textbf{Computational viability:} We implement projections onto nuclear-norm balls via singular value decomposition (or truncated SVD) coupled with $\ell_1$-projections of the singular values \cite{Cai2010SVT,Duchi2008L1proj}, thereby rendering the layer-wise constraints computationally tractable in practice.
+\end{enumerate}
+
+
+\subsection{Constrained and penalized formulations}
+
+From an optimization viewpoint, \eqref{prob:budget} is an inequality-constrained problem. Writing $g(\theta)=\Omega_{\text{energy}}(\theta)-\tau\le 0$, the associated Lagrangian is
+\begin{equation}\label{eq:lagrangiana-energia}
+  \mathcal{L}_{\mathrm{energ}}(\theta,\nu)
+    \;=\;
+      \mathcal{L}_{\text{data}}(\theta) 
+      \;+\; 
+      \nu \bigl( \Omega_{\text{energy}}(\theta) - \tau \bigr),
+  \qquad \nu \ge 0.
+\end{equation}
+Under regularity conditions (e.g., Slater), local optima satisfy the KKT conditions \cite{Rockafellar1976AugLag,Bertsekas1999Nonlinear}:
+there exists $\nu^\star\ge 0$ such that
+\begin{align}
+  &\text{(feasibility)} && \Omega_{\text{energy}}(\theta^\star)\le \tau,\\
+  &\text{(complementary slackness)} && \nu^\star\big(\Omega_{\text{energy}}(\theta^\star)-\tau\big)=0,\\
+  &\text{(stationarity)} && 0\in \nabla \mathcal{L}_{\text{data}}(\theta^\star)\;+\;\nu^\star\,\partial \Omega_{\text{energy}}(\theta^\star),
+\end{align}
+where $\partial \Omega_{\text{energy}}$ is the subdifferential of the sum of nuclear norms across layers. If $W_\ell^\star=U_\ell\Sigma_\ell V_\ell^\top$ is a compact SVD, a subgradient for $\|W_\ell^\star\|_{\ast}$ is $U_\ell V_\ell^\top + Q_\ell$ with $\|Q_\ell\|_2\le 1$ supported on the orthogonal complement of the singular subspace~\cite{Watson1992Subdiff}.
+
+In practice it is convenient to work with a \emph{penalized} objective that can be optimized with standard gradient-based methods. Define
+\[
+[x]_+ := \max\{x,0\}
+\]
+and the exact penalty
+\begin{equation}\label{eq:problema-penalizado-energia}
+  F_\lambda(\theta)
+    \;=\;
+    \mathcal{L}_{\text{data}}(\theta)
+    \;+\;
+    \lambda \,\bigl[ \Omega_{\text{energy}}(\theta) - \tau \bigr]_+,
+\end{equation}
+with $\lambda>0$. The term $[\Omega_{\text{energy}}(\theta)-\tau]_+$ is nonzero only when the energy budget is violated, so:
+\begin{itemize}
+  \item If $\Omega_{\text{energy}}(\theta) \le \tau$, then $F_\lambda(\theta) = \mathcal{L}_{\text{data}}(\theta)$ and training is indistinguishable from standard training.
+  \item If $\Omega_{\text{energy}}(\theta) > \tau$, the penalty pushes the optimizer back into the feasible region.
+\end{itemize}
+Under standard exact-penalty regularity assumptions, sufficiently large values of $\lambda$ lead minimizers of $F_\lambda$ to coincide with constrained solutions  of \eqref{prob:budget}.
+
+\subsection{Augmented Lagrangian and ADMM with nuclear projections}
+
+The augmented Lagrangian of \eqref{prob:budget} is
+\begin{equation}
+  \mathcal{L}_\rho(\theta,\nu)\;=\;\mathcal{L}_{\text{data}}(\theta)\;+\;\nu\,g(\theta)\;+\;\tfrac{\rho}{2}\,g(\theta)^2,
+\end{equation}
+with $\rho>0$. A classical multiplier method iterates
+\[
+  \theta^{k+1}\approx \arg\min_\theta\,\mathcal{L}_\rho(\theta,\nu^k),
+  \qquad
+  \nu^{k+1}=\max\{0,\;\nu^k+\rho\,g(\theta^{k+1})\}.
+\]
+To exploit the layer-wise structure, we introduce auxiliary variables $Z_\ell$ with constraints $W_\ell=Z_\ell$ and move the energy budget to the $Z$-variables:
+\[
+\min_{\theta,Z}\;\mathcal{L}_{\text{data}}(\theta)\quad\text{s.t.}\quad
+W_\ell=Z_\ell\;\;(\ell=1,\dots,m),\qquad \sum_{\ell=1}^m \|Z_\ell\|_*\le \tfrac{\tau}{2}.
+\]
+ADMM with penalty $\rho>0$ produces the iterations
+\begin{align}
+  \text{\bf (W-step)}\quad 
+  &\theta^{k+1}\in\arg\min_\theta \;\mathcal{L}_{\text{data}}(\theta)\;+\;\frac{\rho}{2}\sum_{\ell=1}^m\|W_\ell-Z_\ell^{k}+U_\ell^{k}\|_F^2, \label{eq:admm-W}\\
+  \text{\bf (Z-step)}\quad 
+  &\{Z_\ell^{k+1}\}\in\arg\min_{\{Z_\ell\}} \;\frac{\rho}{2}\sum_{\ell=1}^m\|W_\ell^{k+1}-Z_\ell+U_\ell^{k}\|_F^2
+     \;\;\text{s.t.}\;\; \sum_{\ell}\|Z_\ell\|_{\star}\le \tfrac{\tau}{2}, \label{eq:admm-Z}\\
+  \text{\bf (Dual)}\quad 
+  &U_\ell^{k+1} \leftarrow U_\ell^{k} + W_\ell^{k+1}-Z_\ell^{k+1}\quad(\ell=1,\dots,m).
+\end{align}
+
+In the proposed method we keep the global coupled constraint
+\[
+\sum_{\ell=1}^{m}\|Z_\ell\|_*\le \tfrac{\tau}{2},
+\]
+so the $Z$-step is a joint projection across layers. Let
+\[
+Y_\ell=W_\ell^{k+1}+U_\ell^k = U_\ell \Sigma_\ell V_\ell^\top
+\]
+be the SVD of each shifted layer. Then the solution has the form
+\[
+Z_\ell^{k+1}
+=
+U_\ell \,\mathrm{diag}\!\big((\sigma^{(\ell)}-\lambda^*)_+\big)\,V_\ell^\top,
+\]
+where the common threshold $\lambda^*\ge 0$ is chosen by bisection so that
+\[
+\sum_{\ell=1}^{m}\|Z_\ell^{k+1}\|_*=\tfrac{\tau}{2}
+\]
+whenever the constraint is active. A proportional per-layer budget is considered only as an ablation baseline in Experiment~4.
+\begin{lemma}[Projection onto nuclear/spectral balls]\label{lem:proj-opt}
+Let $C\subset\mathbb{R}^{p\times q}$ be a nonempty, closed, convex set given by either
+a nuclear ball $\{Z:\|Z\|_{\ast}\le \tau\}$ or a spectral ball $\{Z:\|Z\|_{2}\le \tau\}$. For any $Y$, $Z^\star=\Pi_C(Y)$ if and only if
+\[
+  Z^\star \in C
+  \quad\text{and}\quad
+  \langle Y-Z^\star,\; Z-Z^\star\rangle \le 0\;\;\text{for all } Z\in C,
+\]
+i.e., $Y-Z^\star\in N_C(Z^\star)$, the normal cone to $C$ at $Z^\star$. In particular:
+\begin{itemize}
+  \item If $C=\{Z:\|Z\|_{\ast}\le \tau\}$ and $Y=U\Sigma V^\top$ is an SVD, then $Z^\star = U\,\mathrm{diag}(\widehat{\sigma})\,V^\top$, where $\widehat{\sigma}$ is the projection of $\sigma=\mathrm{diag}(\Sigma)$ onto the $\ell_1$ ball of radius $\tau$.
+  \item If $C=\{Z:\|Z\|_{2}\le \tau\}$, then $Z^\star = \min\{1,\tau/\sigma_{\max}(Y)\}\,Y$.
+\end{itemize}
+\end{lemma}
+
+\begin{proof}
+This is the classical characterization of Euclidean projections onto convex sets. The nuclear case follows by composing SVD with an $\ell_1$-projection of singular values; the spectral case follows by rescaling by $\tau/\sigma_{\max}(Y)$ when needed. See, e.g., \cite{Cai2010SVT,Duchi2008L1proj}.
+\end{proof}
+
+\begin{algorithm}[t]
+\caption{ADMM with a global nuclear-norm energy budget}
+\label{alg:admm-energy}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Global budget $\tau$, penalty $\rho>0$, initial weights $W_\ell^0$, $Z_\ell^0=W_\ell^0$, $U_\ell^0=0$.
+\For{$k=0,1,2,\dots$}
+  \State \textbf{(W-step)} Update $\theta^{k+1}$ by solving \eqref{eq:admm-W} with GD/SGD (backpropagation).
+  \State \textbf{(Z-step)} For each layer $\ell$:
+    \begin{itemize}
+      \item \emph{Nuclear:} $Z_\ell^{k+1} \gets \mathrm{Proj}_{\|\cdot\|_{*}\le \tau_\ell}
+      \big(W_\ell^{k+1}+U_\ell^{k}\big)$ (SVD + $\ell_1$-projection of singular values \cite{Duchi2008L1proj}).
+      \item \emph{Spectral:} $Z_\ell^{k+1} \gets \mathrm{Proj}_{\|\cdot\|_2\le \tau_\ell}
+      \big(W_\ell^{k+1}+U_\ell^{k}\big)$ by rescaling with $\min\{1,\tau_\ell/\sigma_{\max}\}$.
+    \end{itemize}
+  \State \textbf{(Dual)} $U_\ell^{k+1}\gets U_\ell^{k}+W_\ell^{k+1}-Z_\ell^{k+1}$.
+  \State \textbf{(Monitoring)} Report $(\mathcal{L}_{\text{data}}(\theta^{k+1}),\;\Omega_{\text{energy}}(Z^{k+1}))$ to track the Pareto pair.
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Convergence analysis and Lyapunov interpretation}
+
+We briefly summarize the key convergence properties of Algorithm~\ref{alg:admm-energy} and its connection with the exact penalty $F_\lambda$.
+
+\begin{proposition}[Primal residual and constraint violation]\label{prop:residuo}
+Assume that projections in the $Z$-step are exact, $\mathcal{L}_{\text{data}}$ is $L$-smooth, and iterates remain in a compact set. Then Algorithm~\ref{alg:admm-energy} produces a sequence with primal residual $\|W^k-Z^k\|\to 0$ and budget violation $[\Omega_{\text{energy}}(Z^k)-\sum_\ell\tau_\ell]_+\to 0$. In the convex case, it converges to a KKT point; in the non-convex case, under KL or local PL assumptions, it converges to a critical point of the augmented objective \cite{Boyd2011ADMM,HeYuan2012ADMM,Attouch2013KL,Reddi2016ADMMnonconvex}.
+\end{proposition}
+
+\begin{proof}[Sketch of the proof]
+Let
+\[
+  \mathcal{C} \;=\;
+  \Big\{\, Z=(Z_1,\dots,Z_m)\;:\;\sum_{\ell=1}^m \|Z_\ell\|_{\ast}\le \tfrac{\tau}{2}\,\Big\}
+  \quad\text{or}\quad
+  \mathcal{C} \;=\; \prod_{\ell=1}^m \big\{Z_\ell:\|Z_\ell\|_{\ast}\le \tau_\ell\big\},
+\]
+depending on whether a global or per-layer budget is used. Consider the augmented Lagrangian (scaled form)
+\[
+  \mathcal{L}_\rho(\theta,Z,U)
+  = \mathcal{L}_{\text{data}}(\theta) + \iota_{\mathcal{C}}(Z)
+     + \frac{\rho}{2}\sum_{\ell=1}^m \|W_\ell - Z_\ell + U_\ell\|_F^2
+     - \frac{\rho}{2}\sum_{\ell=1}^m \|U_\ell\|_F^2,
+\]
+with $\iota_{\mathcal{C}}$ the indicator of $\mathcal{C}$. Let $r_\ell^{k+1} = W_\ell^{k+1} - Z_\ell^{k+1}$ be the primal residuals.
+
+(i) The $W$-step and $Z$-step minimize $\mathcal{L}_\rho$ w.r.t.\ each block, so $\mathcal{L}_\rho(\theta^{k+1},Z^{k+1},U^{k}) \le \mathcal{L}_\rho(\theta^{k},Z^{k},U^{k})$ (block descent). 
+
+(ii) Using $U^{k+1}=U^k+r^{k+1}$ and expanding the quadratic terms shows that
+\[
+  \mathcal{L}_\rho(\theta^{k+1},Z^{k+1},U^{k+1})
+  \;=\; \mathcal{L}_\rho(\theta^{k+1},Z^{k+1},U^{k})
+        + \frac{\rho}{2}\,\|r^{k+1}\|^2.
+\]
+Combining block descent and this identity yields a telescoping inequality
+\[
+  \mathcal{L}_\rho(\theta^{k+1},Z^{k+1},U^{k+1})
+  \;\le\; \mathcal{L}_\rho(\theta^{k},Z^{k},U^{k})
+        - \frac{\rho}{2}\,\|r^{k+1}\|^2.
+\]
+Since $\mathcal{L}_\rho$ is bounded below (by compactness and $L$-smoothness), summing over $k$ shows $\sum_k\|r^{k+1}\|^2<\infty$ and thus $\|r^{k+1}\|\to 0$.
+
+(iii) With exact projections, $Z^{k+1}=\Pi_{\mathcal{C}}(W^{k+1}+U^k)$, so $Z^k\in\mathcal{C}$ for all $k$ and the budget is satisfied at the $Z$-variables. Any cluster point $(\bar\theta,\bar Z,\bar U)$ is feasible and satisfies the first-order optimality conditions of the block problems, which recover KKT in the convex case. Under KL/PL conditions in the non-convex setting, standard arguments yield convergence of the whole sequence to a critical point.
+\end{proof}
+
+The following result concerns the penalized formulation as a complementary viewpoint; it is not a direct convergence theorem for Algorithm~\ref{alg:admm-energy}.
+
+\begin{theorem}[Local linear convergence under PL]\label{thm:pl}
+Consider the exact penalty $F_\lambda(\theta)=\mathcal{L}_{\text{data}}(\theta)+\lambda(\Omega_{\text{energy}}(\theta)-\tau)_+$ and assume $F_\lambda$ is $L$-smooth and satisfies the PL condition
+\[
+  \tfrac{1}{2}\|\nabla F_\lambda(\theta)\|^2 \;\ge\; \mu\,\big(F_\lambda(\theta)-F_\lambda^\star\big)
+\]
+on a compact neighborhood containing the iterates. If the $W$-step is implemented by gradient descent on $F_\lambda$ with stepsize $\alpha\in(0,2/L)$ and the numerical error in the $Z$-step is summable, then
+\[
+F_\lambda(\theta^k)-F_\lambda^\star = \mathcal{O}\big((1-\alpha\mu)^k\big).
+\]
+In particular, $F_\lambda$ acts as a Lyapunov function and the iterates converge linearly (locally) towards a KKT point \cite{Polyak1963,Nesterov2004,Rockafellar1976AugLag,Attouch2013KL}.
+\end{theorem}
+
+\begin{proof}[Sketch of the proof]
+By $L$-smoothness and an inexact gradient step, for $\alpha\in(0,2/L)$ there exists $C>0$ such that
+\[
+  F_\lambda(\theta^{k+1}) 
+  \;\le\; F_\lambda(\theta^{k})
+  - \alpha\Big(1-\frac{\alpha L}{2}\Big)\,\|\nabla F_\lambda(\theta^{k})\|^2
+  + C\,\|e_k\|^2,
+\]
+where $e_k$ represents the inexactness due to the $Z$-step and other numerical errors. Using PL,
+\[
+  \|\nabla F_\lambda(\theta^{k})\|^2 \;\ge\; 2\mu\big(F_\lambda(\theta^{k})-F_\lambda^\star\big),
+\]
+we obtain
+\[
+  F_\lambda(\theta^{k+1}) - F_\lambda^\star
+  \;\le\; \big(1-2\alpha\mu(1-\tfrac{\alpha L}{2})\big)\,\big(F_\lambda(\theta^{k})-F_\lambda^\star\big)
+  \;+\; C\,\|e_k\|^2.
+\]
+If $\sum_k\|e_k\|^2<\infty$ (e.g., exact projections or decaying errors), standard arguments (e.g., Robbins–Siegmund) imply a linear rate $F_\lambda(\theta^{k})-F_\lambda^\star=\mathcal{O}((1-\alpha\mu')^k)$ for some $\mu'>0$.
+\end{proof}
+
+\subsection{Energy gaps and violation bounds}
+
+We collect a few consequences that relate energy gaps and constraint violations to loss gaps and the penalty objective.
+
+\begin{corollary}[Energy gap controlled by the optimal multiplier]\label{cor:energy_loss_linear}
+Assume the energy constraint is active at the constrained optimum $\theta^\star$, i.e., $\Omega_{\text{energy}}(\theta^\star)=\tau$, and let $s^\star\in \partial \Omega_{\text{energy}}(\theta^\star)$ and $\nu^\star\ge 0$ satisfy KKT:
+$\nabla \mathcal{L}_{\text{data}}(\theta^\star)+\nu^\star s^\star=0$. Then, for all feasible $\theta$ ($\Omega_{\text{energy}}(\theta)\le \tau$),
+\[
+  0 \;\le\; \Omega_{\text{energy}}(\theta^\star)-\Omega_{\text{energy}}(\theta)
+  \;\le\; \frac{1}{\nu^\star}\,\big(\mathcal{L}_{\text{data}}(\theta)-\mathcal{L}_{\text{data}}(\theta^\star)\big).
+\]
+\end{corollary}
+
+\begin{proof}
+By convexity of $\Omega_{\text{energy}}$,
+\[
+\Omega_{\text{energy}}(\theta)\ge \Omega_{\text{energy}}(\theta^\star)+\langle s^\star,\theta-\theta^\star\rangle.
+\]
+Rearranging yields
+\[
+\Omega_{\text{energy}}(\theta^\star)-\Omega_{\text{energy}}(\theta)\le -\langle s^\star,\theta-\theta^\star\rangle.
+\]
+Using KKT, $s^\star=-(1/\nu^\star)\nabla\mathcal{L}_{\text{data}}(\theta^\star)$, so
+\[
+\Omega_{\text{energy}}(\theta^\star)-\Omega_{\text{energy}}(\theta)\le \frac{1}{\nu^\star}\langle \nabla\mathcal{L}_{\text{data}}(\theta^\star),\theta-\theta^\star\rangle.
+\]
+By first-order convexity of $\mathcal{L}_{\text{data}}$,
+\[
+\mathcal{L}_{\text{data}}(\theta) - \mathcal{L}_{\text{data}}(\theta^\star)
+\ge \langle \nabla\mathcal{L}_{\text{data}}(\theta^\star),\theta-\theta^\star\rangle,
+\]
+which gives the claim.
+\end{proof}
+
+\begin{corollary}[Energy gap $\lesssim \sqrt{\mathrm{rank}}\cdot\sqrt{\text{loss gap}}$ under strong convexity]\label{cor:energy_loss_rank_SC}
+Let $\theta^\star$ be a feasible optimum and assume that, in a neighborhood of $\theta^\star$, $\mathcal{L}_{\text{data}}$ is $\mu$-strongly convex with respect to the block Frobenius norm:
+\[
+\mathcal{L}_{\text{data}}(\theta)-\mathcal{L}_{\text{data}}(\theta^\star)\ge \frac{\mu}{2}\sum_\ell\|W_\ell-W_\ell^\star\|_F^2.
+\]
+Then, for all feasible $\theta$,
+\[
+  0 \;\le\; \Omega_{\text{energy}}(\theta^\star)-\Omega_{\text{energy}}(\theta)
+  \;\le\; 2\,\sqrt{\frac{2}{\mu}}\;\sqrt{\,R(\Delta W)\,}\;\sqrt{\,\mathcal{L}_{\text{data}}(\theta)-\mathcal{L}_{\text{data}}(\theta^\star)\,},
+\]
+where $\Delta W_\ell \coloneqq W_\ell - W_\ell^\star$ and $R(\Delta W)\coloneqq \sum_{\ell=1}^m \mathrm{rank}(\Delta W_\ell)$.
+\end{corollary}
+
+\begin{proof}
+By subadditivity and the definition $\Omega_{\text{energy}}(\theta)=2\sum_\ell\|W_\ell\|_{\ast}$,
+\[
+\Omega_{\text{energy}}(\theta^\star)-\Omega_{\text{energy}}(\theta)
+=2\sum_\ell \big(\|W_\ell^\star\|_{\ast}-\|W_\ell\|_{\ast}\big)
+ \;\le\; 2\sum_\ell \|W_\ell^\star - W_\ell\|_{\ast}
+ = 2\sum_\ell \|\Delta W_\ell\|_{\ast}.
+\]
+Using $\|A\|_{\ast}\le \sqrt{\mathrm{rank}(A)}\,\|A\|_F$ and Cauchy--Schwarz,
+\[
+  \sum_\ell \|\Delta W_\ell\|_{\ast}
+  \;\le\; \sqrt{\sum_\ell \mathrm{rank}(\Delta W_\ell)}\;\sqrt{\sum_\ell \|\Delta W_\ell\|_F^2}
+  \;=\; \sqrt{R(\Delta W)}\;\|\Delta W\|_F.
+\]
+Strong convexity implies $\|\Delta W\|_F \le \sqrt{\tfrac{2}{\mu}\big(\mathcal{L}_{\text{data}}(\theta)-\mathcal{L}_{\text{data}}(\theta^\star)\big)}$, and the result follows.
+\end{proof}
+
+\begin{corollary}[Energy gap under QG w.r.t.\ the optimal set]\label{cor:energy_loss_QG}
+Let $S^\star$ be the set of feasible optima of $(\mathbf{P}_\tau)$ and assume that
+$\mathcal{L}_{\text{data}}$ satisfies QG with constant $\gamma>0$
+in a neighborhood of $S^\star$, i.e.,
+\[
+  \mathcal{L}_{\text{data}}(\theta)-\mathcal{L}_{\text{data}}^\star
+  \;\ge\; \frac{\gamma}{2}\,\mathrm{dist}(\theta,S^\star)^2.
+\]
+For any feasible $\theta$, let $\theta^\dagger\in S^\star$ be such that
+$\mathrm{dist}(\theta,S^\star)=\|\theta-\theta^\dagger\|$ and define
+$R(\theta,\theta^\dagger)=\sum_\ell \mathrm{rank}(W_\ell-W_\ell^\dagger)$. Then
+\[
+  0 \;\le\; \Omega_{\text{energy}}(\theta^\dagger)-\Omega_{\text{energy}}(\theta)
+  \;\le\; 2\,\sqrt{\frac{2}{\gamma}}\;\sqrt{\,R(\theta,\theta^\dagger)\,}\;
+           \sqrt{\,\mathcal{L}_{\text{data}}(\theta)-\mathcal{L}_{\text{data}}^\star\,}.
+\]
+\end{corollary}
+
+\begin{proof}
+Repeat the argument of Corollary~\ref{cor:energy_loss_rank_SC} with $\theta^\star$ replaced by the closest optimal point $\theta^\dagger\in S^\star$.
+Subadditivity of the nuclear norm gives
+\[
+  \Omega_{\text{energy}}(\theta^\dagger)-\Omega_{\text{energy}}(\theta)
+  \;\le\; 2\sum_\ell \|W_\ell^\dagger - W_\ell\|_{\ast}
+  \;\le\; 2\,\sqrt{R(\theta,\theta^\dagger)}\;\|\theta-\theta^\dagger\|_F.
+\]
+The QG assumption provides $\|\theta-\theta^\dagger\|_F \le \sqrt{\tfrac{2}{\gamma}\big(\mathcal{L}_{\text{data}}(\theta)-\mathcal{L}_{\text{data}}^\star\big)}$, which yields the desired bound.
+\end{proof}
+
+\begin{corollary}[Violation of the energy budget controlled by the penalty gap]\label{cor:violation_penalty}
+Let $F_\lambda(\theta)=\mathcal{L}_{\text{data}}(\theta)+\lambda\,(\Omega_{\text{energy}}(\theta)-\tau)_+$. For all $\theta$ and all $\lambda>0$,
+\[
+  (\Omega_{\text{energy}}(\theta)-\tau)_+
+  \;\le\; \frac{1}{\lambda}\,\big(F_\lambda(\theta)-F_\lambda^\star\big).
+\]
+In particular, if $F_\lambda$ satisfies a PL condition with constant $\mu$ and is optimized by GD with stepsize $\alpha\in(0,2/L)$, the violation decays at least linearly at rate $(1-\alpha\mu)^k$.
+\end{corollary}
+
+\begin{proof}
+Let $\theta^\star\in\arg\min F_\lambda$. Then $(\Omega_{\text{energy}}(\theta^\star)-\tau)_+=0$ at optimality. Thus
+\[
+  F_\lambda(\theta)-F_\lambda(\theta^\star)
+  = \big(\mathcal{L}_{\text{data}}(\theta)-\mathcal{L}_{\text{data}}(\theta^\star)\big)
+        + \lambda\big((\Omega_{\text{energy}}(\theta)-\tau)_+ - 0\big)
+  \;\ge\; \lambda\,(\Omega_{\text{energy}}(\theta)-\tau)_+.
+\]
+The claim follows by rearranging. The linear decay under PL follows from combining this inequality with the PL-based rate for $F_\lambda$.
+\end{proof}
+
+\begin{remark}[Computational cost]
+Nuclear projections require SVD; in practice we use truncated SVD (top-$k$) and/or thresholding heuristics (SVT) \cite{Cai2010SVT}. Spectral-ball projections only need $\sigma_{\max}$, which can be approximated with a few power iterations. The $W$-step uses standard SGD/Adam, so the existing training pipeline is preserved.
+\end{remark}
+
+\section{Numerical Experiments}\label{sec:experiments}
+
+This section provides a comprehensive empirical evaluation of the theoretical framework developed in Sections~\ref{sec:relation}--\ref{sec:energy_budget}. We organize the experiments in five stages: (i)~verification of the energy--loss stability bound (Theorems~\ref{thm:main} and~\ref{thm:qg}) on controlled synthetic and real settings; (ii)~validation of ADMM convergence and constraint satisfaction (Proposition~\ref{prop:residuo}, Corollary~\ref{cor:violation_penalty}); (iii)~a systematic comparison of five training strategies across three network depths; (iv)~an ablation study of the projection algorithm; and (v)~spectral analysis of the trained weight matrices.
+
+All experiments were executed on an Apple MacBook Pro with an M3 Pro processor (11 cores, 18\,GB unified RAM) running macOS, using PyTorch~2.8.0 and Python~3.11.11. Computations were performed on CPU to ensure deterministic reproducibility.
+
+\subsection{Experimental Setup}\label{sec:exp_setup}
+
+\subsubsection{Network architectures.}
+We employ three fully connected multilayer perceptrons (MLPs) of increasing depth, summarized in Table~\ref{tab:architectures}. All use ReLU activations in hidden layers and a linear output layer for 10-class classification. Parameter counts are kept comparable ($\sim$235--267\,K) to isolate the effect of depth from that of capacity.
+
+\begin{table}[ht]
+\centering
+\caption{MLP architectures used in the experiments.}
+\label{tab:architectures}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Name} & \textbf{Layer widths} & \textbf{Weight layers} & \textbf{Parameters} \\
+\midrule
+SimpleMLP (3L) & 784--256--128--10 & 3 & 235\,146 \\
+DeepMLP6 (6L) & 784--256--128--64--64--32--10 & 6 & 248\,682 \\
+DeepMLP9 (9L) & 784--256--128--128--64--64--32--32--16--10 & 9 & 266\,618 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Additionally, for the Hölder bound verification (Experiment~1), we use two auxiliary architectures: a \textbf{SyntheticMLP} ($20$--$50$--$1$, trained with MSE on teacher-generated data) and a \textbf{TinyMLP} ($784$--$5$--$2$, binary MNIST classification), both small enough to allow exact Hessian computation.
+
+\subsubsection{Dataset.}
+MNIST~\cite{lecun1998gradient} with a random subsample of $10{,}000$ training and $2{,}000$ validation images, normalized with mean $0.1307$ and standard deviation $0.3081$. Subsampling enables rapid multi-seed experimentation while preserving statistically meaningful comparisons.
+
+\subsubsection{Training methods.}
+Five training strategies are compared:
+\begin{itemize}
+    \item \textbf{STD} (Standard): SGD with momentum $0.9$, learning rate $\eta=0.01$, no regularization.
+    \item \textbf{WD} (Weight Decay): Same optimizer with $L_2$ penalty $\lambda=10^{-3}$.
+    \item \textbf{NUC} (Nuclear Penalty): SGD with a soft nuclear-norm penalty $\lambda_{\mathrm{nuc}}\sum_\ell\|W_\ell\|_*$ added to the loss, where $\lambda_{\mathrm{nuc}}$ is calibrated per architecture via grid search over $\{10^{-4}, 3\times 10^{-4}, 5\times 10^{-4}, 10^{-3}, 2\times 10^{-3}\}$ to minimize $|\Omega(\theta)-\tau|$.
+    \item \textbf{SN} (Spectral Normalization): Each weight matrix is normalized by its largest singular value at every forward pass, i.e., $W_\ell\leftarrow W_\ell/\sigma_{\max}(W_\ell)$, following Miyato et al.~\cite{Miyato2018SpectralNorm}. This enforces $\|W_\ell\|_2\le 1$ for every layer independently, bounding the per-layer Lipschitz constant.
+    \item \textbf{ADMM} (Energy Constraint): Full ADMM with $W$-step (SGD + augmented Lagrangian $({\rho}/{2})\sum_\ell\|W_\ell-Z_\ell+U_\ell\|_F^2$), $Z$-step (joint nuclear-norm projection onto $\{\sum_\ell\|Z_\ell\|_*\le\tau/2\}$ via bisection), and $U$-step ($U_\ell\leftarrow U_\ell+W_\ell-Z_\ell$). Adaptive $\rho$ follows Boyd et al.~\cite{Boyd2011ADMM}: if the primal residual exceeds $10\times$ the dual residual, $\rho$ is doubled; if the dual exceeds $10\times$ the primal, $\rho$ is halved.
+\end{itemize}
+All methods are trained for 25 epochs with batch size 64. The ADMM method uses a warmup of 3 epochs (no constraint enforcement) followed by a 5-epoch annealing phase during which $\tau$ is interpolated linearly from the current energy to the target budget $\tau=0.80\,\Omega_{\mathrm{STD}}$ (80\% of the unconstrained baseline energy).
+
+\subsubsection{Seeds and statistical reporting.}
+All experiments involving the three main architectures (3L, 6L, 9L) are repeated over five random seeds ($s\in\{42,123,456,789,1024\}$). Results are reported as mean $\pm$ standard deviation. The use of five seeds (rather than the more common three) provides narrower confidence intervals and more reliable variance estimates, strengthening the statistical conclusions.
+
+\subsubsection{Joint projection algorithm.}\label{sec:joint_proj}
+The theoretical constraint $\sum_\ell\|W_\ell\|_*\le\tau/2$ defines a coupled feasible set across layers. Rather than distributing the budget proportionally per layer ($\tau_\ell\propto\mathrm{numel}(W_\ell)$, which can starve narrow layers under proportional budget allocation), we find a single Lagrange multiplier $\lambda^*\ge 0$ such that
+\begin{equation}\label{eq:joint_proj}
+    \sum_{\ell=1}^{L} \left\| \mathrm{soft}_{\lambda^*}(W_\ell) \right\|_* = \frac{\tau}{2},
+\end{equation}
+where $\mathrm{soft}_\lambda(W_\ell)=U_\ell\,\mathrm{diag}\!\big(\max(\sigma_i^{(\ell)}-\lambda,0)\big)V_\ell^\top$. Since the left-hand side is continuous and strictly decreasing in $\lambda$, the unique root $\lambda^*$ is found by bisection (typically $<50$ iterations, tolerance $10^{-4}$).
+
+
+%% ====================================================================
+\subsection{Experiment~1: Verification of the Hölder Stability Bound}\label{sec:exp_holder}
+
+Theorems~\ref{thm:main} and~\ref{thm:qg} predict that, near a minimizer satisfying strong convexity (SC) with constant $\mu>0$, the adjustment ratio
+\[
+    \mathcal{R} \;=\; \frac{|E(W)-E(W^*)|}{2\sqrt{2R/\mu}\,\sqrt{\mathcal{L}(W)-\mathcal{L}(W^*)}}
+\]
+is bounded by $1$. We evaluate this prediction in two settings with exact Hessian computation.
+
+\subsubsection{Setting~A: Synthetic regression.}
+A two-layer SyntheticMLP ($d_{\mathrm{in}}=20$, $d_{\mathrm{hid}}=50$, $d_{\mathrm{out}}=1$) is trained with MSE loss on data generated by a teacher network of identical architecture, perturbed by Gaussian noise $\epsilon\sim\mathcal{N}(0,0.1)$. For each of $N=50$ independent trials, we identify a minimizer $W^*$ via L-BFGS and compute $\mu$ from the minimum positive eigenvalue of the Hessian at $W^*$. The adjustment ratio is tracked over 100 SGD epochs from random initializations.
+
+\paragraph{Results.}
+All 50 trials yield $\mathcal{R}<1$, with a maximum observed ratio of $0.0003$. The mean ratio across trials is $0.0001$. The bound is far from tight, consistent with the expected behavior of the $\frac{1}{2}$-Hölder inequality as an upper envelope.
+
+\subsubsection{Setting~B: MNIST binary classification.}
+A TinyMLP ($784$--$5$--$2$, no bias, $3{,}930$ parameters) is trained on digits $\{0,1\}$ with cross-entropy loss. The same protocol is repeated for $N=10$ trials. Before computing the ratio, we verify whether the SC hypothesis holds at $W^*$ by checking $\mu=\lambda_{\min}^+(\nabla^2\mathcal{L}(W^*))>10^{-4}$ (threshold chosen relative to the loss scale).
+
+\paragraph{Results.}
+Of 10 trials, only $1$ satisfies the SC hypothesis ($\mu=1.01\times 10^{-4}$), while $9$ have $\mu<10^{-4}$ (effectively zero), meaning the SC precondition is not met. The single SC-valid trial yields $\mathcal{R}\approx 4001$, indicating that the bound is \emph{vacuous} in this configuration. This outcome is expected: cross-entropy on non-convex networks rarely satisfies SC near the minimizer, and the resulting extreme $\mu^{-1}$ term inflates the bound far beyond observability.
+
+\paragraph{Interpretation.}
+These two settings together validate and delimit the Hölder bound. Under the hypotheses of the theorem (MSE loss, SC satisfied), the bound holds rigorously with substantial margin. In the realistic setting (CE loss, non-convex), the SC hypothesis is almost never satisfied, which is itself an informative result: it precisely identifies the gap between the theoretical setting and practical training, rather than representing a failure of the bound.
+
+Table~\ref{tab:holder} summarizes both settings, and Figure~\ref{fig:holder_mc} visualizes the adjustment ratio trajectories across all trials.
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=\linewidth]{fig1_holder_mc.png}
+    \caption{\textbf{Hölder bound verification.} (a)~Adjustment ratio $\mathcal{R}$ over 100 SGD epochs for $N=50$ synthetic trials (blue traces; mean in dark blue). All trajectories remain well below the theoretical bound of $1.0$ (red dashed). (b)~Adjustment ratio for the SC-valid MNIST trials. (c)~Distribution of the maximum ratio across trials. The synthetic setting robustly satisfies $\mathcal{R}<1$; the MNIST setting shows that SC is rarely met.}
+    \label{fig:holder_mc}
+\end{figure}
+
+\begin{table}[ht]
+\centering
+\caption{Hölder bound verification. Setting~A: synthetic MSE. Setting~B: MNIST CE.}
+\label{tab:holder}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Setting} & $N$ & \textbf{SC met} & $\max\,\mathcal{R}$ & \textbf{All $\mathcal{R}<1$?} \\
+\midrule
+A: Synthetic (MSE) & 50 & 50/50 & 0.0003 & Yes \\
+B: MNIST (CE)      & 10 & 1/10  & 4001   & No (SC rarely holds) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+%% ====================================================================
+\subsection{Experiment~2: ADMM Convergence Diagnostics}\label{sec:exp_admm}
+
+This experiment validates Proposition~\ref{prop:residuo} (primal residual $\|W-Z\|\to 0$) and Corollary~\ref{cor:violation_penalty} (budget violation $(\Omega(\theta)-\tau)_+\to 0$) using the SimpleMLP (3L) architecture across 5 random seeds.
+
+\subsubsection{Protocol.}
+For each seed, we train with the ADMM method for 25 epochs with $\tau=0.80\,\Omega_{\mathrm{STD}}$. At each epoch we record: the energy budget violation $(\Omega(\theta)-\tau)_+$, the primal residual $\|W-Z\|_F$, the dual residual $\rho\|Z^{k}-Z^{k-1}\|_F$, and the adaptive penalty parameter $\rho$.
+
+\subsubsection{Results.}
+Table~\ref{tab:admm} reports the final-epoch diagnostics.
+
+\begin{table}[ht]
+\centering
+\caption{ADMM convergence diagnostics at epoch 25 (SimpleMLP 3L, 5 seeds). $\tau$: energy budget; $E_{\mathrm{final}}$: final energy; Violation: $(\Omega-\tau)_+$; $\|W-Z\|$: primal residual; Acc: validation accuracy.}
+\label{tab:admm}
+\begin{tabular}{cccccc}
+\toprule
+\textbf{Seed} & $\tau$ & $E_{\mathrm{final}}$ & \textbf{Violation} & $\|W-Z\|$ & \textbf{Acc (\%)} \\
+\midrule
+42   & 416.9 & 414.7 & 0.0000 & 0.0567 & 95.30 \\
+123  & 418.9 & 417.6 & 0.0000 & 0.0313 & 96.75 \\
+456  & 417.7 & 417.6 & 0.0000 & 0.0018 & 96.40 \\
+789  & 417.5 & 416.4 & 0.0000 & 0.0268 & 96.50 \\
+1024 & 418.4 & 418.2 & 0.0000 & 0.0059 & 96.05 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All five seeds achieve \textbf{zero budget violation} and small primal residual ($\max\|W-Z\|=0.057$), confirming the convergence predictions of Proposition~\ref{prop:residuo}. The final energy $E_{\mathrm{final}}$ is consistently below or at $\tau$, verifying that the constraint $\Omega(\theta)\le\tau$ is satisfied exactly. The adaptive $\rho$ schedule exhibits the expected behavior described in~\cite{Boyd2011ADMM}: $\rho$ decreases over training as the primal and dual residuals equilibrate.
+
+Validation accuracy ranges from $95.3\%$ to $96.8\%$, confirming that the constraint does not catastrophically degrade performance. Figure~\ref{fig:admm_diagnostics} shows the evolution of the four diagnostic quantities across epochs for all seeds.
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=\linewidth]{fig2_admm_diagnostics.png}
+    \caption{\textbf{ADMM convergence diagnostics (3L, 5~seeds).} (a)~Energy budget violation $(\Omega-\tau)_+$ converges to zero for all seeds. (b)~Primal residual $\|W-Z\|_F$ decreases monotonically. (c)~Dual residual. (d)~Adaptive $\rho$ decreasing trajectory. All quantities confirm the convergence analysis of Proposition~\ref{prop:residuo}.}
+    \label{fig:admm_diagnostics}
+\end{figure}
+
+
+%% ====================================================================
+\subsection{Experiment~3: Five-Method Comparison Across Depths}\label{sec:exp_comparison}
+
+This is the central experiment of the paper. We compare the five training methods (STD, WD, NUC, SN, ADMM) across all three architectures (3L, 6L, 9L) with 5 seeds each ($s\in\{42,123,456,789,1024\}$), yielding $5\times 3\times 5=75$ training runs.
+
+\subsubsection{Results.}
+Table~\ref{tab:comparison} reports the main results: validation accuracy, energy at convergence, generalization gap (train accuracy minus validation accuracy), and whether the energy budget $\Omega\le\tau$ is satisfied.
+
+\begin{table}[ht]
+\centering
+\caption{Main comparison: STD, WD, NUC, SN, ADMM across three depths. Budget $\tau=0.80\,\Omega_{\mathrm{STD}}$. Each entry: mean $\pm$ std over 5 seeds. $\Omega\le\tau$: number of seeds satisfying the budget.}
+\label{tab:comparison}
+\begin{tabular}{llcccc}
+\toprule
+\textbf{Depth} & \textbf{Method} & \textbf{Acc (\%)} & \textbf{Energy} & \textbf{Gap (\%)} & $\Omega\le\tau$ \\
+\midrule
+\multirow{5}{*}{3L}
+  & STD  & $96.46\pm 0.40$ & $522.3\pm 0.9$  & $3.54\pm 0.40$ & --- \\
+  & WD   & $96.65\pm 0.33$ & $382.2\pm 0.7$  & $3.35\pm 0.33$ & --- \\
+  & NUC  & $96.47\pm 0.34$ & $436.4\pm 0.9$  & $3.53\pm 0.34$ & 0/5 \\
+  & SN   & $95.26\pm 0.20$ & $508.0\pm 0.7$  & $2.06\pm 0.13$ & 0/5 \\
+  & ADMM & $96.20\pm 0.50$ & $416.9\pm 1.3$  & $3.28\pm 0.59$ & \textbf{5/5} \\
+\midrule
+\multirow{5}{*}{6L}
+  & STD  & $96.35\pm 0.40$ & $721.3\pm 8.9$  & $3.59\pm 0.35$ & --- \\
+  & WD   & $96.50\pm 0.28$ & $511.3\pm 2.9$  & $3.50\pm 0.28$ & --- \\
+  & NUC  & $96.53\pm 0.11$ & $595.8\pm 7.9$  & $3.47\pm 0.11$ & 0/5 \\
+  & SN   & $93.55\pm 0.64$ & $726.2\pm 0.7$  & $0.84\pm 0.67$ & 0/5 \\
+  & ADMM & $95.38\pm 0.52$ & $576.2\pm 7.0$  & $3.84\pm 0.28$ & \textbf{5/5} \\
+\midrule
+\multirow{5}{*}{9L}
+  & STD  & $94.95\pm 0.55$ & $972.4\pm 12.9$ & $3.98\pm 0.25$ & --- \\
+  & WD   & $94.20\pm 0.75$ & $711.8\pm 21.3$ & $4.19\pm 0.27$ & --- \\
+  & NUC  & $94.65\pm 0.92$ & $799.8\pm 28.9$ & $4.22\pm 0.34$ & 1/5 \\
+  & SN   & $78.26\pm 5.79$ & $879.3\pm 8.5$  & $0.31\pm 1.09$ & 0/5 \\
+  & ADMM & $88.21\pm 5.43$ & $777.7\pm 10.6$ & $2.31\pm 1.45$ & \textbf{5/5} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Several patterns emerge from Table~\ref{tab:comparison}:
+
+\paragraph{Constraint satisfaction.}
+ADMM satisfies the energy budget in \textbf{all 15 runs} ($5/5$ at each depth), while NUC fails to satisfy the budget in $14$ of $15$ runs (meeting it only once at 9L), and SN fails in all $15$ runs ($0/5$ at every depth). This is the core empirical finding: neither soft penalties nor per-layer spectral constraints can guarantee a global energy budget. Only the ADMM projection, which operates jointly across all layers, achieves certified constraint satisfaction.
+
+\paragraph{Spectral normalization: per-layer control is insufficient.}
+SN achieves the lowest generalization gaps at every depth ($2.06\%$, $0.84\%$, $0.31\%$ for 3L, 6L, 9L, respectively), yet this comes at a severe accuracy cost. At 3L, SN loses $1.4\%$ relative to WD ($95.3\%$ vs.\ $96.7\%$). At 6L, SN drops to $93.6\%$ ($-2.9\%$ vs.\ WD). At 9L, SN collapses to $78.3\%$ with high variance ($\pm 5.8\%$), a catastrophic degradation. The root cause is evident in the energy column: SN does not reduce total energy at all---its energy at 3L ($508.0$) and 6L ($726.2$) is comparable to or exceeds STD, and at 9L ($879.3$) it remains far above the budget $\tau\approx 778$. By constraining only $\sigma_{\max}(W_\ell)=1$ per layer, SN uniformly clips the largest singular value while leaving the remainder of the spectrum---and hence the nuclear norm $\sum_j\sigma_j$---essentially uncontrolled. This is precisely the theoretical distinction identified in the introduction: the nuclear norm captures the \emph{entire} singular spectrum, whereas the spectral norm controls only its maximum.
+
+\paragraph{Accuracy--depth trade-off.}
+At 3L, the four non-SN methods achieve similar accuracy ($96.2$--$96.7\%$), with ADMM only $0.5\%$ below WD. At 6L, the gap between ADMM and WD widens to $1.1\%$ ($95.4\%$ vs.\ $96.5\%$). At 9L, ADMM drops to $88.2\%$ with high variance ($\pm 5.4\%$), while WD achieves $94.2\%$. This depth-dependent degradation is a direct consequence of the increasingly restrictive constraint: deeper networks distribute energy across more layers, and the $80\%$ budget imposes tighter per-layer effective constraints. Notably, SN suffers an even more severe depth penalty than ADMM at 9L ($78.3\%$ vs.\ $88.2\%$), despite not enforcing any global energy constraint---suggesting that aggressive per-layer spectral clipping disrupts gradient flow in deep networks.
+
+\paragraph{Generalization gap.}
+ADMM produces smaller generalization gaps than STD, WD, and NUC at 9L ($2.31\%$ vs.\ $3.98$--$4.22\%$), consistent with the theoretical prediction that bounding the nuclear norm controls model complexity. SN achieves even lower gaps ($0.31\%$ at 9L), but this is a symptom of severe underfitting rather than effective regularization---the corresponding accuracy of $78.3\%$ indicates that the model has lost the capacity to express the classification boundary. This distinction is important: a low generalization gap is a necessary but not sufficient condition for good regularization; it must coexist with adequate representational capacity.
+
+Figure~\ref{fig:training_dynamics} illustrates the training dynamics for the 3L architecture including SN, and Figure~\ref{fig:acc_depth} shows accuracy by depth across all five methods.
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=\linewidth]{fig3_dynamics.png}
+    \caption{\textbf{Training dynamics (3L, seed~42).} (a)~Validation loss vs.\ epoch. (b)~Validation accuracy vs.\ epoch. (c)~Energy $\Omega(\theta)$ vs.\ epoch, with budget $\tau$ (red dashed). STD grows energy freely; WD and NUC reduce it partially; SN does not reduce energy (\emph{it controls only $\sigma_{\max}$}); ADMM enforces the budget exactly after the warmup phase.}
+    \label{fig:training_dynamics}
+\end{figure}
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=\linewidth]{fig4_acc_depth.png}
+    \caption{\textbf{Validation accuracy by depth} (mean $\pm$ std over 5~seeds). STD, WD, and NUC perform comparably across depths. SN suffers a progressive accuracy penalty that becomes catastrophic at 9L. ADMM maintains competitive accuracy at 3L--6L with a measurable cost at 9L.}
+    \label{fig:acc_depth}
+\end{figure}
+
+
+%% ====================================================================
+\subsection{Experiment~4: Joint vs.\ Per-Layer Projection}\label{sec:exp_projection}
+
+This experiment isolates the effect of the projection algorithm on ADMM performance. We compare two variants at $\tau=0.80\,\Omega_{\mathrm{STD}}$ (seed 42):
+\begin{itemize}
+    \item \textbf{Per-layer (split)}: Each layer receives $\tau_\ell\propto\mathrm{numel}(W_\ell)$ and is projected independently.
+    \item \textbf{Joint (bisection)}: A single $\lambda^*$ is found via bisection to enforce the global constraint, as described in Section~\ref{sec:joint_proj}.
+\end{itemize}
+
+\subsubsection{Results.}
+Table~\ref{tab:projection} and Figure~\ref{fig:projection} present the results.
+
+\begin{table}[ht]
+\centering
+\caption{Impact of the projection algorithm on accuracy (\%) at $\tau=80\%$. WD serves as unconstrained reference.}
+\label{tab:projection}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Depth} & \textbf{Per-layer (\%)} & \textbf{Joint (\%)} & \textbf{WD (\%)} & $\Delta_{\text{joint}-\text{WD}}$ \\
+\midrule
+3L & 69.05 & 95.30 & 96.20 & $-0.90$ \\
+6L & 10.05 & 94.95 & 96.35 & $-1.40$ \\
+9L & 11.65 & 79.30 & 94.65 & $-15.35$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=0.85\linewidth]{fig5_projection.png}
+    \caption{\textbf{Joint vs.\ per-layer projection across depths.} Per-layer (red) collapses to chance level ($\sim$10\%) at $\ge$6L. Joint (green) preserves accuracy at 3L--6L and partially at 9L. WD (blue) serves as unconstrained reference.}
+    \label{fig:projection}
+\end{figure}
+
+The per-layer method suffers catastrophic collapse at $\ge$6 layers: $10.05\%$ at 6L and $11.65\%$ at 9L (both approximately $1/10$, i.e., chance level for 10-class MNIST). The root cause is the proportional budget allocation: a layer $W\in\mathbb{R}^{16\times 10}$ comprising $<0.1\%$ of total parameters receives a negligible $\tau_\ell$, and the $\ell_1$-projection annihilates its singular values, destroying gradient flow through the network.
+
+The joint projection resolves this failure completely at 3L ($95.3\%$) and 6L ($95.0\%$). At 9L, the joint method achieves $79.3\%$---substantially above chance but below WD ($94.7\%$)---reflecting the compounded difficulty of enforcing a tight global budget across 9 layers with a single seed. The multi-seed ADMM results of Experiment~3 (Table~\ref{tab:comparison}) show that the 9L accuracy varies considerably across seeds ($86.9\pm 5.7\%$), suggesting that the 9L configuration is sensitive to initialization under strict constraints.
+
+
+%% ====================================================================
+\subsection{Experiment~5: Spectral Analysis}\label{sec:exp_spectral}
+
+To examine the structural effect of energy-constrained training on the weight matrices, we measure the effective rank of each layer, defined as
+\[
+    r_{\text{eff}}(\sigma) = \exp\!\Big(-\sum_i p_i\log p_i\Big), \qquad p_i = \frac{\sigma_i}{\sum_j \sigma_j},
+\]
+and report the rank ratio $r_{\text{eff}}/\min(m,n)\in[0,1]$, where values close to $0$ indicate low-rank (spectrally sparse) structure.
+
+\subsubsection{Results.}
+Table~\ref{tab:spectral} reports the average effective rank ratios and spectral norm statistics across all layers for each method and depth, averaged over 5~seeds.
+
+\begin{table}[ht]
+\centering
+\caption{Effective rank ratio and spectral norm by depth and method (5~seeds). Lower rank ratios indicate greater spectral compression. $\overline{\sigma}_{\max}$: average largest singular value across layers.}
+\label{tab:spectral}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Depth} & \textbf{STD} & \textbf{WD} & \textbf{NUC} & \textbf{SN} & \textbf{ADMM} \\
+\midrule
+\multicolumn{6}{l}{\emph{Effective rank ratio}} \\
+3L & 0.904 & 0.875 & 0.863 & 0.921 & 0.882 \\
+6L & 0.847 & 0.811 & 0.783 & 0.839 & 0.798 \\
+9L & 0.810 & 0.762 & 0.724 & 0.811 & 0.798 \\
+\midrule
+\multicolumn{6}{l}{\emph{Average $\sigma_{\max}$ per layer}} \\
+3L & 2.24 & 1.97 & 2.20 & 1.59 & 1.90 \\
+6L & 2.04 & 1.73 & 1.98 & 1.92 & 1.88 \\
+9L & 2.39 & 2.25 & 2.37 & 2.15 & 1.94 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The rank reduction of ADMM relative to STD is modest: $2.4\%$ at 3L, $5.8\%$ at 6L, and $1.5\%$ at 9L. NUC achieves the strongest rank reduction across all depths ($4.5\%$ at 3L, $7.6\%$ at 6L, $10.6\%$ at 9L), despite being unable to satisfy the constraint.
+
+SN presents a distinctive spectral profile. Despite clamping $\sigma_{\max}(W_\ell)=1$ at every forward pass, SN produces the \emph{highest} effective rank ratios among all methods ($0.921$, $0.839$, $0.811$ for 3L, 6L, 9L), indicating less spectral compression than even unconstrained training. This counterintuitive result arises because the normalization $W_\ell/\sigma_{\max}(W_\ell)$ redistributes spectral mass toward smaller singular values without reducing their number, effectively ``flattening'' the spectrum rather than compressing it. In contrast, NUC and ADMM genuinely reduce spectral content. The metric $\overline{\sigma}_{\max}$ confirms SN's per-layer control: SN achieves the lowest value at 3L ($1.59$ vs.\ $2.24$ for STD) but has minimal effect at 6L--9L ($1.92$--$2.15$, comparable to WD and ADMM). This confirms that SN's constraint is purely local and does not propagate to global spectral properties.
+
+The asymmetry between NUC and ADMM is informative: NUC, as a gradient-based penalty, uniformly shrinks all singular values during backpropagation, inducing low-rank structure as a side effect. ADMM, by contrast, operates through projection---a non-smooth operation that clips singular values only when the constraint is violated---and does not bias the gradient toward low-rank solutions during the $W$-step. The ADMM method thus controls the \emph{total} nuclear norm (energy) without necessarily compressing individual layers' spectra.
+
+Figure~\ref{fig:spectral_profiles} shows the normalized singular value distributions for the 3L architecture including all five methods, and Figure~\ref{fig:energy_smax} shows the energy and $\sigma_{\max}$ profiles across depths.
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=\linewidth]{fig6_spectral.png}
+    \caption{\textbf{Singular value profiles (3L architecture, seed~42).} Normalized singular values for each layer. NUC (purple) shows the strongest spectral compression. SN (orange) alters the spectral shape by clamping $\sigma_{\max}$ to $1$ but does not uniformly shrink all singular values. ADMM (red) is closer to STD, reflecting its non-gradient-based constraint enforcement mechanism.}
+    \label{fig:spectral_profiles}
+\end{figure}
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=\linewidth]{fig7_energy_smax.png}
+    \caption{\textbf{Energy and $\sigma_{\max}$ by depth and method} (5~seeds). (a)~Total energy $\Omega(\theta)$ with budget $\tau$ (red dashed). SN does not reduce energy; ADMM satisfies the budget at all depths. (b)~Average $\sigma_{\max}$ per layer. SN achieves the lowest $\sigma_{\max}$ at 3L but its advantage diminishes with depth.}
+    \label{fig:energy_smax}
+\end{figure}
+
+
+%% ====================================================================
+\subsection{Discussion}\label{sec:discussion}
+
+The five experiments above provide a nuanced picture of the theoretical framework's strengths and limitations. We organize the discussion around four themes: what the experiments verify, what they reveal about local vs.\ global spectral control, what practical trade-offs emerge, and what the experiments delimit.
+
+\subsubsection{Verified claims.}
+
+\paragraph{ADMM convergence and constraint satisfaction (Proposition~\ref{prop:residuo}, Corollary~\ref{cor:violation_penalty}).}
+The experimental evidence for ADMM convergence is consistent across the reported runs. Across 5 seeds in Experiment~2 and 15 additional runs in the five-method multi-depth comparison (Experiment~3), the ADMM method achieves \textbf{zero budget violation in all 20 runs} and primal residual $\|W-Z\|\le 0.057$. This is the main empirical finding of the paper: the ADMM algorithm not only converges, but does so reliably across seeds, depths, and initializations. No other method tested---including the NUC penalty, which explicitly targets nuclear norms, and spectral normalization~\cite{Miyato2018SpectralNorm}, which constrains $\sigma_{\max}(W_\ell)\le 1$ per layer---can guarantee $\Omega(\theta)\le\tau$. NUC satisfies the budget in only $1/15$ runs, while SN fails in all $15/15$.
+
+\paragraph{Hölder stability under SC (Theorems~\ref{thm:main} and~\ref{thm:qg}).}
+In the synthetic MSE setting (Setting~A), where the SC hypothesis is verifiable and satisfied, the Hölder bound holds in all 50 trials with the adjustment ratio $\mathcal{R}<0.001$. This provides clean, direct verification of the theoretical prediction in its natural domain.
+
+\paragraph{Joint projection necessity.}
+The per-layer projection collapses to random-chance accuracy at depth $\ge 6$ (Experiment~4), while the joint projection preserves performance. This validates the mathematical argument that the coupled constraint must be enforced globally through bisection, and constitutes a concrete algorithmic contribution with immediate practical implications.
+
+\subsubsection{Practical trade-offs.}
+
+\paragraph{The depth--accuracy--constraint triangle.}
+A recurring pattern across Experiments~3 and~4 is the increasing tension between strict constraint enforcement and accuracy as depth grows. At 3L, the accuracy cost of ADMM is negligible ($\Delta=0.5\%$ vs.\ WD). At 6L, it becomes measurable ($\Delta=1.1\%$). At 9L, it is substantial ($\Delta=6.0\%$ with high variance). SN exhibits an even steeper degradation curve ($\Delta=1.4\%$, $2.9\%$, $16.7\%$), demonstrating that any form of spectral constraint---whether per-layer or global---interacts non-trivially with network depth.
+
+\paragraph{Soft vs.\ hard constraint enforcement.}
+The NUC and SN baselines provide complementary contrasts to ADMM. NUC achieves comparable accuracy to WD at all depths and the strongest spectral compression, but fails to satisfy the budget in $14/15$ runs. SN constrains $\sigma_{\max}$ per layer but leaves the total nuclear norm uncontrolled, resulting in no energy reduction and catastrophic accuracy loss at depth. ADMM satisfies the budget in every run but with a depth-dependent accuracy cost. This trichotomy cleanly separates three distinct objectives: \emph{spectral regularization} (for which soft penalties like NUC suffice), \emph{Lipschitz control} (for which SN is appropriate), and \emph{certified energy constraint satisfaction} (for which only the ADMM-based projection works).
+
+\paragraph{Generalization gap.}
+ADMM produces smaller generalization gaps than STD, WD, and NUC, especially at 9L ($2.3\%$ vs.\ $\sim$4\%). SN achieves even lower gaps ($0.3\%$ at 9L), but this reflects severe underfitting rather than effective capacity control: the corresponding accuracy of $78.3\%$ indicates the model cannot express the classification boundary. A broadly applicable regularizer should minimize the generalization gap \emph{while preserving accuracy}---a criterion that ADMM meets at shallow-to-moderate depths but that SN fails at depth $\ge 6$.
+
+\subsubsection{Delimited claims.}
+
+\paragraph{Hölder bound in realistic settings.}
+Setting~B of Experiment~1 shows that the SC hypothesis is satisfied in only 1 of 10 trials on MNIST binary classification with a tiny network. This is not a failure of the theorem but rather a precise empirical characterization of where the hypotheses apply. Cross-entropy loss on non-convex networks typically yields loss landscapes where the local curvature $\mu$ is negligible, making the theoretical constant $\sqrt{2R/\mu}$ so large that the bound becomes vacuous. This result suggests that extensions of the stability analysis to settings beyond SC---such as KL-type conditions or Riemannian curvature---would be valuable theoretical directions.
+
+\paragraph{Spectral rank reduction.}
+The multi-seed, five-method experiments confirm that ADMM's rank reduction is modest ($2.4\%$, $5.8\%$, $1.5\%$ for 3L, 6L, 9L) while NUC achieves the strongest compression ($4.5$--$10.6\%$). Counterintuitively, SN produces the \emph{highest} effective rank ratios of all five methods ($0.921$, $0.839$, $0.811$; Table~\ref{tab:spectral}), exceeding even unconstrained training ($0.904$, $0.847$, $0.810$). This reflects the fact that the normalization $W_\ell/\sigma_{\max}(W_\ell)$ flattens the singular spectrum without reducing the number of active singular values—it redistributes spectral mass rather than compressing it. Meanwhile, SN's $\overline{\sigma}_{\max}$ reveals that its per-layer spectral control diminishes with depth ($1.59$ at 3L vs.\ $2.15$ at 9L), while ADMM maintains consistent $\overline{\sigma}_{\max}$ reduction across all depths ($1.90$--$1.94$). This confirms that global projection provides more uniform spectral control than per-layer normalization.
+
+\paragraph{Scale of experiments.}
+The experiments are conducted on MNIST with MLPs of comparable parameter counts ($\sim$235--267K). While sufficient to validate the theoretical predictions and demonstrate the algorithmic framework, extension to convolutional/attention architectures and larger datasets (CIFAR-10/100, ImageNet) remains an important direction for future work.
+
+\paragraph{Computational overhead.}
+The ADMM method incurs approximately $3\times$ wall-clock overhead relative to STD due to per-epoch SVD computations. For the architectures tested, this amounts to $\sim$55\,s vs.\ $\sim$17\,s for 25 epochs. The cost is dominated by the SVD of the first layer ($784\times 256$); narrower deeper layers contribute negligibly. Approximate SVD methods~\cite{Cai2010SVT} or reduced-frequency projection are promising avenues for scaling.
+
+
+%% ====================================================================
+\section{Conclusions}\label{sec:conclusions}
+
+This work established a rigorous connection between the spectral structure of neural network weights and the classical notion of graph energy, and demonstrated that this connection yields both theoretical guarantees and a practical constrained training algorithm. We summarize the main contributions and their implications.
+
+\paragraph{Spectral characterization.}
+By interpreting each weight matrix $W_\ell$ as the bi-adjacency matrix of a bipartite graph, we showed that the graph energy of the full network satisfies $E(A)\le 2\sum_\ell\|W_\ell\|_*=\Omega(\theta)$. This bridges algebraic graph theory and neural network regularization, providing an additive, layer-wise measure of structural complexity.
+
+\paragraph{Stability bounds.}
+Under strong convexity (Theorem~\ref{thm:main}) or the weaker quadratic-growth condition (Theorem~\ref{thm:qg}), the deviation of graph energy is bounded by $\mathcal{O}(\sqrt{R/\gamma}\cdot\sqrt{\Delta\mathcal{L}})$. The bound was verified exactly in the synthetic MSE setting ($50/50$ trials, $\mathcal{R}<0.001$). In the realistic cross-entropy setting, the SC precondition is satisfied in only $\sim$10\% of trials, precisely identifying the gap between the theoretical hypotheses and practical training landscapes.
+
+\paragraph{Constraint satisfaction via ADMM.}
+The ADMM algorithm with joint nuclear-norm projection achieved zero budget violation in all 20 independent training runs (5 seeds in the dedicated convergence experiment, 15 additional in the five-method multi-depth comparison), with primal residual bounded by $0.057$. This is the strongest empirical contribution: no other tested method---standard training, weight decay, soft nuclear penalty, or spectral normalization---can guarantee the constraint $\Omega(\theta)\le\tau$ for any configuration. Spectral normalization, in particular, failed to satisfy the energy budget in all 15 runs despite constraining $\sigma_{\max}(W_\ell)\le 1$ per layer.
+
+\paragraph{Accuracy--constraint trade-off.}
+Energy-constrained training achieves accuracy within $0.5\%$ of weight decay at shallow depths (3 layers), with a measurable and increasing cost at greater depths ($6.0\%$ at 9 layers, over 5~seeds). Spectral normalization suffers an even steeper accuracy penalty ($16.7\%$ at 9L relative to WD), demonstrating that per-layer $\sigma_{\max}$-clipping disrupts gradient flow more severely than global nuclear-norm projection. The observation that ADMM reduces the generalization gap---from $\sim$4\% (unconstrained) to $2.3\%$ (constrained) at 9 layers---confirms that the nuclear-norm budget acts as effective capacity control. SN also reduces the generalization gap ($0.3\%$ at 9L), but this reflects severe underfitting rather than useful regularization, as the corresponding accuracy of $78.3\%$ demonstrates.
+
+\paragraph{Joint projection as a critical algorithmic requirement.}
+The coupled constraint $\sum_\ell\|W_\ell\|_*\le\tau/2$ must be enforced globally through a single Lagrange multiplier $\lambda^*$ found by bisection, rather than decomposed proportionally across layers. The per-layer approach collapses to chance-level accuracy ($\sim$10\%) at $\ge 6$ layers by starving narrow layers of their spectral budget. This is a concrete, algorithm-level finding with direct practical implications for any implementation of nuclear-norm-constrained neural network training.
+
+\paragraph{Spectral normalization vs.\ energy constraint: local vs.\ global control.}
+The comparison with spectral normalization~\cite{Miyato2018SpectralNorm} provides the most direct empirical test of the theoretical argument that the nuclear norm $\sum_j\sigma_j$ is a fundamentally different object from the spectral norm $\sigma_{\max}$. SN constrains only the largest singular value per layer and operates with no inter-layer coupling; as a consequence, it does not reduce the total graph energy $\Omega(\theta)$ in any configuration. ADMM, by constraining the sum of nuclear norms globally, achieves certified energy budgets while distributing spectral compression across all layers and singular values via a single Lagrange multiplier. This distinction has practical implications: for applications requiring verifiable energy bounds---such or capacity-controlled compression---per-layer spectral normalization is provably insufficient.
+
+\paragraph{Limitations and future directions.}
+Three limitations delimit the current work. First, the experiments use MNIST and fully connected architectures; extending to convolutional and transformer models on larger datasets is an essential next step. Second, the $\frac{1}{2}$-Hölder stability bound requires local strong convexity, which is rarely satisfied for cross-entropy loss on non-convex networks; extensions to KL-type or Riemannian curvature conditions would broaden the theoretical applicability. Third, the energy budget $\tau$ was set as a fixed fraction of unconstrained energy; adaptive budget scheduling that accounts for depth-dependent capacity requirements is a promising algorithmic direction.
+
+\paragraph{Broader impact.}
+The graph-energy perspective offers a unifying framework in which spectral regularization, constraint certification, and structural compression can be understood within a single mathematical language. By demonstrating that ADMM-based energy-constrained training is both theoretically grounded and practically viable, this work opens a pathway toward training algorithms that embed structural guarantees by design, complementing the role of post-hoc regularization heuristics such as weight decay.
+
+
+
+%% ====================================================================
+\section*{Data availability}
+
+The complete experimental code, including the build script, trained models, figures, and all CSV tables, is available at \url{https://github.com/cero1979/Ensayos-Energy-Graph}.
+
+\section*{Declaration of competing interest}
+
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+\section*{Acknowledgments}
+We would like to thank the Pontificia Universidad Javeriana Cali for its support in all academic aspects of this paper's development.
+\section*{CRediT authorship contribution statement}
+\textbf{Carlos Ramírez Ovalle:} Conceptualization, Methodology, Software, Validation, Supervision, Writing -- Original Draft, Writing -- Review \& Editing.
+
+\textbf{Abel Alvarez:} Conceptualization, Methodology, Software, Validation, Supervision, Writing -- Original Draft, Writing -- Review \& Editing.
+
+\textbf{Andr\'es J. C. V\'asquez:} Conceptualization, Methodology, Software, Validation, Supervision, Writing -- Original Draft, Writing -- Review \& Editing.
+
+\medskip
+\noindent The authors contributed equally to the development of this article.
+
+\appendix
+
+\section{Reproducibility}\label{app:reproducibility}
+
+
+
+
+
+All six experiments—including the Hölder stability verification (Experiments 1A–1B), ADMM convergence diagnostics (Experiment 2), four-method comparison (Experiment 3), joint vs per-layer projection ablation (Experiment 4), spectral analysis (Experiment 5), and the five-method extension incorporating spectral normalization (Experiment 6)—are consolidated in a single, self-contained Jupyter notebook (EXPARTFINAL.ipynb). The notebook trains all model configurations (5 methods × 3 depths × 5 seeds for Experiment 6; 4 methods × 3 depths × 3 seeds for Experiment 3) and produces every associated figure and table. Every figure and table in this paper is reproducible by executing `Run All Cells` in the notebook on the specified hardware configuration. The complete repository is publicly available at `https://github.com/cero1979/Ensayos-Energy-Graph`.
+
+All experiments were executed on an Apple MacBook Pro with an M3 Pro processor (11 cores, 18\,GB unified RAM) running macOS, using PyTorch~2.8.0 and Python~3.11.11. Computations were performed on CPU to ensure deterministic reproducibility.
+
+%% Bibliography embedded from manuscrito.bbl (required for Elsevier compilation)
+\bibliographystyle{cas-model2-names}
+% \bibliography{reference}  % commented out: .bbl content inlined below
+
+\begin{thebibliography}{35}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\href}[2]{#2}
+\providecommand{\path}[1]{#1}
+\providecommand{\DOIprefix}{doi:}
+\providecommand{\ArXivprefix}{arXiv:}
+\providecommand{\URLprefix}{URL: }
+\providecommand{\Pubmedprefix}{pmid:}
+\providecommand{\doi}[1]{\href{http://dx.doi.org/#1}{\path{#1}}}
+\providecommand{\Pubmed}[1]{\href{pmid:#1}{\path{#1}}}
+\providecommand{\bibinfo}[2]{#2}
+\ifx\xfnm\relax \def\xfnm[#1]{\unskip,\space#1}\fi
+%Type = Article
+\bibitem[{Acharya et~al.(2025)Acharya, Yener and
+  Beamer}]{Acharya2025GraphEnergy}
+\bibinfo{author}{Acharya, V.}, \bibinfo{author}{Yener, B.},
+  \bibinfo{author}{Beamer, G.}, \bibinfo{year}{2025}.
+\newblock \bibinfo{title}{Distilling knowledge from graph neural networks
+  trained on cell graphs to non-neural student models}.
+\newblock \bibinfo{journal}{Scientific Reports} \bibinfo{volume}{15},
+  \bibinfo{pages}{29274}.
+\newblock \DOIprefix\doi{10.1038/s41598-025-13697-7}.
+%Type = Article
+\bibitem[{Arya and Lee(2025)}]{arya2025effects}
+\bibinfo{author}{Arya, Y.}, \bibinfo{author}{Lee, S.H.}, \bibinfo{year}{2025}.
+\newblock \bibinfo{title}{Effects of structural properties of neural networks
+  on machine learning performance}.
+\newblock \bibinfo{journal}{arXiv preprint arXiv:2507.10005} .
+%Type = Article
+\bibitem[{Attouch et~al.(2013)Attouch, Bolte and Svaiter}]{Attouch2013KL}
+\bibinfo{author}{Attouch, H.}, \bibinfo{author}{Bolte, J.},
+  \bibinfo{author}{Svaiter, B.F.}, \bibinfo{year}{2013}.
+\newblock \bibinfo{title}{Convergence of descent methods for semi-algebraic and
+  tame problems: Proximal algorithms, forward--backward splitting, and
+  regularized gauss--seidel methods}.
+\newblock \bibinfo{journal}{Mathematical Programming} \bibinfo{volume}{137},
+  \bibinfo{pages}{91--129}.
+\newblock \DOIprefix\doi{10.1007/s10107-011-0496-3}.
+%Type = Book
+\bibitem[{Bertsekas(1999)}]{Bertsekas1999Nonlinear}
+\bibinfo{author}{Bertsekas, D.P.}, \bibinfo{year}{1999}.
+\newblock \bibinfo{title}{Nonlinear Programming}.
+\newblock \bibinfo{edition}{2} ed., \bibinfo{publisher}{Athena Scientific},
+  \bibinfo{address}{Belmont, MA}.
+%Type = Book
+\bibitem[{Bhatia(1997)}]{Bhatia1997}
+\bibinfo{author}{Bhatia, R.}, \bibinfo{year}{1997}.
+\newblock \bibinfo{title}{Matrix Analysis}. volume \bibinfo{volume}{169} of
+  \textit{\bibinfo{series}{Graduate Texts in Mathematics}}.
+\newblock \bibinfo{publisher}{Springer}, \bibinfo{address}{New York}.
+%Type = Article
+\bibitem[{Boyd et~al.(2011)Boyd, Parikh, Chu, Peleato and
+  Eckstein}]{Boyd2011ADMM}
+\bibinfo{author}{Boyd, S.}, \bibinfo{author}{Parikh, N.}, \bibinfo{author}{Chu,
+  E.}, \bibinfo{author}{Peleato, B.}, \bibinfo{author}{Eckstein, J.},
+  \bibinfo{year}{2011}.
+\newblock \bibinfo{title}{Distributed optimization and statistical learning via
+  the alternating direction method of multipliers}.
+\newblock \bibinfo{journal}{Foundations and Trends in Machine Learning}
+  \bibinfo{volume}{3}, \bibinfo{pages}{1--122}.
+\newblock \DOIprefix\doi{10.1561/2200000016}.
+%Type = Article
+\bibitem[{Bozkurt et~al.(2010)Bozkurt, G"ung"or, Gutman and
+  Cevik}]{Bozkurt2010RandicEnergy}
+\bibinfo{author}{Bozkurt, S.B.}, \bibinfo{author}{G"ung"or, A.D.},
+  \bibinfo{author}{Gutman, I.}, \bibinfo{author}{Cevik, A.S.},
+  \bibinfo{year}{2010}.
+\newblock \bibinfo{title}{Randi\'c matrix and randi\'c energy}.
+\newblock \bibinfo{journal}{MATCH Communications in Mathematical and in
+  Computer Chemistry} \bibinfo{volume}{64}, \bibinfo{pages}{239--250}.
+\newblock \URLprefix
+  \url{http://match.pmf.kg.ac.rs/electronic_versions/Match64/n1/match64n1_239-250.pdf}.
+%Type = Article
+\bibitem[{Cai et~al.(2010)Cai, Cand{\`e}s and Shen}]{Cai2010SVT}
+\bibinfo{author}{Cai, J.F.}, \bibinfo{author}{Cand{\`e}s, E.J.},
+  \bibinfo{author}{Shen, Z.}, \bibinfo{year}{2010}.
+\newblock \bibinfo{title}{A singular value thresholding algorithm for matrix
+  completion}.
+\newblock \bibinfo{journal}{SIAM Journal on Optimization} \bibinfo{volume}{20},
+  \bibinfo{pages}{1956--1982}.
+\newblock \DOIprefix\doi{10.1137/080738970}.
+%Type = Inproceedings
+\bibitem[{Chen et~al.(2018)Chen, Tung, Vedula and
+  Mori}]{Chen2018ConstraintAware}
+\bibinfo{author}{Chen, C.}, \bibinfo{author}{Tung, F.},
+  \bibinfo{author}{Vedula, N.}, \bibinfo{author}{Mori, G.},
+  \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{Constraint-aware deep neural network compression},
+  in: \bibinfo{booktitle}{European Conference on Computer Vision (ECCV)}, pp.
+  \bibinfo{pages}{400--415}.
+\newblock \DOIprefix\doi{10.1007/978-3-030-01237-3_25}.
+%Type = Inproceedings
+\bibitem[{Duchi et~al.(2008)Duchi, Shalev-Shwartz, Singer and
+  Chandra}]{Duchi2008L1proj}
+\bibinfo{author}{Duchi, J.}, \bibinfo{author}{Shalev-Shwartz, S.},
+  \bibinfo{author}{Singer, Y.}, \bibinfo{author}{Chandra, T.},
+  \bibinfo{year}{2008}.
+\newblock \bibinfo{title}{Efficient projections onto the $\ell_{1}$-ball for
+  learning in high dimensions}, in: \bibinfo{booktitle}{Proceedings of the 25th
+  International Conference on Machine Learning (ICML)}, pp.
+  \bibinfo{pages}{272--279}.
+\newblock \URLprefix
+  \url{https://stanford.edu/~jduchi/projects/DuchiShSiCh08.pdf},
+  \DOIprefix\doi{10.1145/1390156.1390191}.
+%Type = Article
+\bibitem[{Fuchsgruber et~al.(2024)Fuchsgruber, Wollschl{\"a}ger and
+  G{\"u}nnemann}]{Fuchsgruber2024GEBM}
+\bibinfo{author}{Fuchsgruber, D.}, \bibinfo{author}{Wollschl{\"a}ger, T.},
+  \bibinfo{author}{G{\"u}nnemann, S.}, \bibinfo{year}{2024}.
+\newblock \bibinfo{title}{Energy-based epistemic uncertainty for graph neural
+  networks}.
+\newblock \bibinfo{journal}{Advances in Neural Information Processing Systems}
+  \bibinfo{volume}{37}.
+\newblock \bibinfo{note}{NeurIPS 2024, arXiv:2406.04043}.
+%Type = Book
+\bibitem[{Golub and Van~Loan(2013)}]{golub2013matrix}
+\bibinfo{author}{Golub, G.H.}, \bibinfo{author}{Van~Loan, C.F.},
+  \bibinfo{year}{2013}.
+\newblock \bibinfo{title}{Matrix computations}.
+\newblock \bibinfo{publisher}{JHU press}.
+%Type = Article
+\bibitem[{Gutman(1978)}]{Gutman1978}
+\bibinfo{author}{Gutman, I.}, \bibinfo{year}{1978}.
+\newblock \bibinfo{title}{The energy of a graph}.
+\newblock \bibinfo{journal}{Berichte der Mathematisch-Statistischen Sektion im
+  Forschungszentrum Graz} \bibinfo{volume}{103}, \bibinfo{pages}{1--22}.
+%Type = Article
+\bibitem[{Gutman and Zhou(2006)}]{GutmanZhou2006}
+\bibinfo{author}{Gutman, I.}, \bibinfo{author}{Zhou, B.}, \bibinfo{year}{2006}.
+\newblock \bibinfo{title}{Laplacian energy of a graph}.
+\newblock \bibinfo{journal}{Linear Algebra and its Applications}
+  \bibinfo{volume}{414}, \bibinfo{pages}{29--37}.
+\newblock \DOIprefix\doi{10.1016/j.laa.2005.09.008}.
+%Type = Book
+\bibitem[{Gutman and Zhou(2012)}]{GutmanZhou2012}
+\bibinfo{author}{Gutman, I.}, \bibinfo{author}{Zhou, B.}, \bibinfo{year}{2012}.
+\newblock \bibinfo{title}{Graph Energy}.
+\newblock \bibinfo{publisher}{Springer}, \bibinfo{address}{New York}.
+%Type = Article
+\bibitem[{He and Yuan(2012)}]{HeYuan2012ADMM}
+\bibinfo{author}{He, B.}, \bibinfo{author}{Yuan, X.}, \bibinfo{year}{2012}.
+\newblock \bibinfo{title}{On the $\mathcal{O}(1/n)$ convergence rate of the
+  douglas--rachford alternating direction method}.
+\newblock \bibinfo{journal}{SIAM Journal on Numerical Analysis}
+  \bibinfo{volume}{50}, \bibinfo{pages}{700--709}.
+\newblock \DOIprefix\doi{10.1137/110823090}.
+%Type = Article
+\bibitem[{Hong et~al.(2016)Hong, Luo and
+  Razaviyayn}]{HongLuoRazaviyayn2016ADMM}
+\bibinfo{author}{Hong, M.}, \bibinfo{author}{Luo, Z.Q.},
+  \bibinfo{author}{Razaviyayn, M.}, \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Convergence analysis of alternating direction method
+  of multipliers for a family of nonconvex problems}.
+\newblock \bibinfo{journal}{SIAM Journal on Optimization} \bibinfo{volume}{26},
+  \bibinfo{pages}{337--364}.
+\newblock \DOIprefix\doi{10.1137/140961758}.
+%Type = Book
+\bibitem[{Horn and Johnson(2012)}]{HornJohnson2012}
+\bibinfo{author}{Horn, R.A.}, \bibinfo{author}{Johnson, C.R.},
+  \bibinfo{year}{2012}.
+\newblock \bibinfo{title}{Matrix Analysis}.
+\newblock \bibinfo{edition}{2} ed., \bibinfo{publisher}{Cambridge University
+  Press}, \bibinfo{address}{Cambridge}.
+%Type = Article
+\bibitem[{Huang et~al.(2016)Huang, Chen and Lu}]{Reddi2016ADMMnonconvex}
+\bibinfo{author}{Huang, F.}, \bibinfo{author}{Chen, S.}, \bibinfo{author}{Lu,
+  Z.}, \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Stochastic alternating direction method of
+  multipliers with variance reduction for nonconvex optimization}.
+\newblock \bibinfo{journal}{arXiv preprint arXiv:1610.02758} \URLprefix
+  \url{https://arxiv.org/abs/1610.02758}.
+%Type = Article
+\bibitem[{Indulal et~al.(2008)Indulal, Gutman and
+  Vijayakumar}]{Indulal2008DistanceEnergy}
+\bibinfo{author}{Indulal, G.}, \bibinfo{author}{Gutman, I.},
+  \bibinfo{author}{Vijayakumar, A.}, \bibinfo{year}{2008}.
+\newblock \bibinfo{title}{On distance energy of graphs}.
+\newblock \bibinfo{journal}{MATCH Communications in Mathematical and in
+  Computer Chemistry} \bibinfo{volume}{60}, \bibinfo{pages}{461--472}.
+\newblock \URLprefix
+  \url{http://match.pmf.kg.ac.rs/electronic_versions/Match60/n2/match60n2_461-472.pdf}.
+%Type = Article
+\bibitem[{Karimi et~al.(2016)Karimi, Nutini and Schmidt}]{Karimi2016QGPL}
+\bibinfo{author}{Karimi, H.}, \bibinfo{author}{Nutini, J.},
+  \bibinfo{author}{Schmidt, M.}, \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Linear convergence of gradient and proximal-gradient
+  methods under the polyak–{\l}ojasiewicz condition}.
+\newblock \bibinfo{journal}{arXiv preprint arXiv:1608.04636} \URLprefix
+  \url{https://arxiv.org/abs/1608.04636}.
+%Type = Inproceedings
+\bibitem[{Krogh and Hertz(1991)}]{Krogh1991WeightDecay}
+\bibinfo{author}{Krogh, A.}, \bibinfo{author}{Hertz, J.A.},
+  \bibinfo{year}{1991}.
+\newblock \bibinfo{title}{A simple weight decay can improve generalization},
+  in: \bibinfo{booktitle}{Advances in Neural Information Processing Systems},
+  \bibinfo{publisher}{Morgan Kaufmann}.
+%Type = Article
+\bibitem[{LeCun et~al.(1998)LeCun, Bottou, Bengio and
+  Haffner}]{lecun1998gradient}
+\bibinfo{author}{LeCun, Y.}, \bibinfo{author}{Bottou, L.},
+  \bibinfo{author}{Bengio, Y.}, \bibinfo{author}{Haffner, P.},
+  \bibinfo{year}{1998}.
+\newblock \bibinfo{title}{Gradient-based learning applied to document
+  recognition}.
+\newblock \bibinfo{journal}{Proceedings of the IEEE} \bibinfo{volume}{86},
+  \bibinfo{pages}{2278--2324}.
+\newblock \DOIprefix\doi{10.1109/5.726791}.
+%Type = Book
+\bibitem[{Li et~al.(2012)Li, Shi and Gutman}]{Gutman2012}
+\bibinfo{author}{Li, X.}, \bibinfo{author}{Shi, Y.}, \bibinfo{author}{Gutman,
+  I.}, \bibinfo{year}{2012}.
+\newblock \bibinfo{title}{Graph Energy}.
+\newblock \bibinfo{publisher}{Springer}, \bibinfo{address}{New York, NY}.
+\newblock \URLprefix
+  \url{https://link.springer.com/book/10.1007/978-1-4614-4220-2},
+  \DOIprefix\doi{10.1007/978-1-4614-4220-2}.
+%Type = Article
+\bibitem[{Martens(2020)}]{Martens2020}
+\bibinfo{author}{Martens, J.}, \bibinfo{year}{2020}.
+\newblock \bibinfo{title}{New insights and perspectives on the natural gradient
+  method}.
+\newblock \bibinfo{journal}{Journal of Machine Learning Research}
+  \bibinfo{volume}{21}, \bibinfo{pages}{1--76}.
+\newblock \URLprefix \url{https://jmlr.org/papers/v21/17-678.html}.
+%Type = Inproceedings
+\bibitem[{Miyato et~al.(2018)Miyato, Kataoka, Koyama and
+  Yoshida}]{Miyato2018SpectralNorm}
+\bibinfo{author}{Miyato, T.}, \bibinfo{author}{Kataoka, T.},
+  \bibinfo{author}{Koyama, M.}, \bibinfo{author}{Yoshida, Y.},
+  \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{Spectral normalization for generative adversarial
+  networks}, in: \bibinfo{booktitle}{International Conference on Learning
+  Representations (ICLR)}.
+%Type = Book
+\bibitem[{Nesterov(2004)}]{Nesterov2004}
+\bibinfo{author}{Nesterov, Y.}, \bibinfo{year}{2004}.
+\newblock \bibinfo{title}{Introductory Lectures on Convex Optimization: A Basic
+  Course}. volume~\bibinfo{volume}{87} of \textit{\bibinfo{series}{Applied
+  Optimization}}.
+\newblock \bibinfo{publisher}{Kluwer Academic Publishers},
+  \bibinfo{address}{Boston, MA}.
+\newblock \URLprefix
+  \url{https://link.springer.com/book/10.1007/978-1-4419-8853-9}.
+  \bibinfo{note}{reprinted by Springer; eBook DOI: 10.1007/978-1-4419-8853-9}.
+%Type = Book
+\bibitem[{Parlett(1998)}]{Parlett1998}
+\bibinfo{author}{Parlett, B.N.}, \bibinfo{year}{1998}.
+\newblock \bibinfo{title}{The Symmetric Eigenvalue Problem}.
+\newblock \bibinfo{publisher}{SIAM}, \bibinfo{address}{Philadelphia}.
+%Type = Article
+\bibitem[{Polyak(1963)}]{Polyak1963}
+\bibinfo{author}{Polyak, B.T.}, \bibinfo{year}{1963}.
+\newblock \bibinfo{title}{Gradient methods for minimizing functionals}.
+\newblock \bibinfo{journal}{USSR Computational Mathematics and Mathematical
+  Physics} \bibinfo{volume}{3}, \bibinfo{pages}{864--878}.
+\newblock \DOIprefix\doi{10.1016/0041-5553(63)90322-3}.
+%Type = Article
+\bibitem[{Rockafellar(1976)}]{Rockafellar1976AugLag}
+\bibinfo{author}{Rockafellar, R.T.}, \bibinfo{year}{1976}.
+\newblock \bibinfo{title}{Augmented lagrangians and applications of the
+  proximal point algorithm in convex programming}.
+\newblock \bibinfo{journal}{Mathematics of Operations Research}
+  \bibinfo{volume}{1}, \bibinfo{pages}{97--116}.
+\newblock \DOIprefix\doi{10.1287/moor.1.2.97}.
+%Type = Article
+\bibitem[{Wang et~al.(2019)Wang, Yin and Zeng}]{WangYinZeng2019ADMM}
+\bibinfo{author}{Wang, Y.}, \bibinfo{author}{Yin, W.}, \bibinfo{author}{Zeng,
+  J.}, \bibinfo{year}{2019}.
+\newblock \bibinfo{title}{Global convergence of admm in nonconvex nonsmooth
+  optimization}.
+\newblock \bibinfo{journal}{Journal of Scientific Computing}
+  \bibinfo{volume}{78}, \bibinfo{pages}{29--63}.
+\newblock \DOIprefix\doi{10.1007/s10915-018-0757-z}.
+%Type = Article
+\bibitem[{Watson(1992)}]{Watson1992Subdiff}
+\bibinfo{author}{Watson, G.A.}, \bibinfo{year}{1992}.
+\newblock \bibinfo{title}{Characterization of the subdifferentials of some
+  matrix norms}.
+\newblock \bibinfo{journal}{Linear Algebra and its Applications}
+  \bibinfo{volume}{170}, \bibinfo{pages}{33--45}.
+\newblock \DOIprefix\doi{10.1016/0024-3795(92)90355-O}.
+%Type = Inproceedings
+\bibitem[{Yang et~al.(2019)Yang, Zhu and Liu}]{Yang2019ECC}
+\bibinfo{author}{Yang, H.}, \bibinfo{author}{Zhu, Y.}, \bibinfo{author}{Liu,
+  J.}, \bibinfo{year}{2019}.
+\newblock \bibinfo{title}{Energy-constrained compression for deep neural
+  networks via weighted sparse projection and layer input masking}, in:
+  \bibinfo{booktitle}{International Conference on Learning Representations}.
+\newblock \URLprefix \url{https://arxiv.org/abs/1806.04321}.
+  \bibinfo{note}{iCLR 2019}.
+%Type = Inproceedings
+\bibitem[{You et~al.(2020)You, Leskovec, He and Xie}]{you2020graph}
+\bibinfo{author}{You, J.}, \bibinfo{author}{Leskovec, J.}, \bibinfo{author}{He,
+  K.}, \bibinfo{author}{Xie, S.}, \bibinfo{year}{2020}.
+\newblock \bibinfo{title}{Graph structure of neural networks}, in:
+  \bibinfo{booktitle}{International Conference on Machine Learning},
+  \bibinfo{organization}{PMLR}. pp. \bibinfo{pages}{10881--10891}.
+%Type = Article
+\bibitem[{Zeng et~al.(2023)Zeng, Zhang, Zhong and Liu}]{Zeng2023DepthEnergy}
+\bibinfo{author}{Zeng, X.}, \bibinfo{author}{Zhang, M.},
+  \bibinfo{author}{Zhong, Z.}, \bibinfo{author}{Liu, Y.}, \bibinfo{year}{2023}.
+\newblock \bibinfo{title}{Energy-constrained deep neural network compression
+  for depth estimation}.
+\newblock \bibinfo{journal}{Electronics} \bibinfo{volume}{12},
+  \bibinfo{pages}{732}.
+\newblock \DOIprefix\doi{10.3390/electronics12030732}.
+
+\end{thebibliography}
+
+\end{document}

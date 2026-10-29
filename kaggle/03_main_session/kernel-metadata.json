@@ -1,0 +1,15 @@
+{
+  "id": "abelalv/energia-2-main",
+  "title": "Energia-2 benchmark principal",
+  "code_file": "03_main_session.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

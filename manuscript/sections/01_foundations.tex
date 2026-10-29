@@ -1,0 +1,136 @@
+\section{Introduction}\label{sec:intro}
+A dense feedforward network carries a natural signed weighted graph: neurons are vertices and matrix entries are edge weights. The sum of the absolute eigenvalues of a symmetric adjacency matrix is its graph energy, equivalently its nuclear norm. The classical graph-energy literature provides the spectral starting point~\cite{Gutman2012}. Extending this definition to real signed weights is convenient for neural networks, but does not identify spectral energy with electrical consumption, inference operations, storage, or the complexity of the represented function.
+
+Nuclear-norm regularization and singular-value thresholding are established tools~\cite{Watson1992Subdiff,Cai2010SVT}. Compression-aware training using low-rank regularization was studied by Alvarez and Salzmann~\cite{AlvarezSalzmann2017}; norm-constrained training using Frank--Wolfe was studied by Zimmer, Spiegel and Pokutta~\cite{Zimmer2022}. Consequently, neither nuclear-norm training nor imposing norm constraints on neural networks is new. The present contribution is an explicit derivation of graph-energy comparison bounds for consecutive-layer architectures, a consistent local stability statement, and finite-iteration diagnostics for a global spectral budget. We make no priority claim for the underlying matrix inequalities, projection method, or ADMM splitting.
+
+The distinction between a graph quantity and its additive surrogate matters both mathematically and computationally. A single bipartite block has energy twice the nuclear norm of its weight matrix; overlapping blocks in a multilayer adjacency matrix generally do not have additive energies. The feasible set considered here budgets the additive surrogate. Its exact Euclidean projection couples the layers through a single singular-value threshold. Fixed layer budgets instead specify a usually smaller feasible set, which can be useful but solves a different projection problem.
+
+Local quadratic growth bounds distance to a minimizer set by the square root of the loss gap. This implication provides conditional stability near that set; it does not show that a low spectral budget guarantees low loss, or that a trained ReLU network satisfies quadratic growth. Relations among quadratic growth, strong convexity and the Polyak--\L{}ojasiewicz condition require their own hypotheses~\cite{Karimi2016QGPL}. Our proofs use quadratic growth directly and do not infer it from selected positive Hessian eigenvalues.
+
+The optimization analysis likewise separates an exact mathematical step from stochastic implementation. Standard ADMM is a useful splitting framework~\cite{Boyd2011ADMM}, but its convex convergence results do not automatically apply to inexact neural-network training with momentum, changing penalties and varying budgets. We therefore state finite-iteration feasibility and conditional stationarity certificates, and specify the experiments needed to assess practical behavior without assuming that ADMM is superior.
+
+\section{Layered graph energy and its additive surrogate}\label{sec:graph}
+Let $m\ge1$ be the number of weight matrices and let the $m+1$ neuron layers have positive widths $n_0,\ldots,n_m$. We use column activations and
+\[
+ W_\ell\in\R^{n_\ell\times n_{\ell-1}},\qquad
+ b_\ell\in\R^{n_\ell},\qquad
+ x_\ell=\phi_\ell(W_\ell x_{\ell-1}+b_\ell).
+\]
+The graph uses signed entries of $W_\ell$ without taking absolute values. Biases are trainable parameters but are excluded from the graph and budget. Adding constant vertices to encode biases would define another graph and another budget; we do not make that substitution implicitly.
+
+The symmetric adjacency $A(W)$ has zero diagonal blocks and
+\begin{equation}\label{eq:adjacency}
+ A(W)_{\ell,\ell-1}=W_\ell,\quad
+ A(W)_{\ell-1,\ell}=W_\ell^\top\quad(\ell=1,\ldots,m),
+\end{equation}
+with all other blocks zero. Even-indexed and odd-indexed neuron layers form a bipartition of the full graph. Define
+\begin{equation}\label{eq:omega}
+ E(A(W))=\norm{A(W)}_*,\qquad
+ \Omega(W)=2\sum_{\ell=1}^m\norm{W_\ell}_*.
+\end{equation}
+Here $\norm{\cdot}_*$, $\norm{\cdot}_2$ and $\norm{\cdot}_F$ are respectively the nuclear, spectral and Frobenius matrix norms.
+
+\begin{proposition}[Block identity and two-sided comparison]\label{prop:graph}
+For the consecutive-layer adjacency~\eqref{eq:adjacency},
+\begin{equation}\label{eq:bilateral}
+ E\!\left(\begin{bmatrix}0&W_\ell^\top\\ W_\ell&0\end{bmatrix}\right)
+ =2\norm{W_\ell}_*,\qquad
+ \frac{\Omega(W)}2\le E(A(W))\le\Omega(W).
+\end{equation}
+These statements include zero weights and arbitrary real signs. No claim is made that the lower comparison constant is optimal.
+\end{proposition}
+\begin{proof}
+If $W_\ell=Q_\ell\Sigma_\ell V_\ell^\top$ is a compact SVD, each positive singular value $\sigma_i$ yields eigenvectors $(v_i,\pm q_i)/\sqrt2$ of the displayed block with eigenvalues $\pm\sigma_i$. The other eigenvalues are zero. This proves the block identity. Write $A=\sum_\ell\widetilde B_\ell$, where each $\widetilde B_\ell$ is the corresponding block embedded in the full vertex space. The nuclear-norm triangle inequality gives the upper bound.
+
+For the lower bound, put $\varepsilon_\ell=(-1)^{\lfloor\ell/2\rfloor}$ for layer indices $\ell=0,\ldots,m$ and $J=\diag(\varepsilon_0 I_{n_0},\ldots,\varepsilon_m I_{n_m})$. The product $\varepsilon_{\ell-1}\varepsilon_\ell$ is $+1$ for odd $\ell$ and $-1$ for even $\ell$. Thus
+\[
+ A_o=(A+JAJ)/2=\sum_{\ell\ \text{odd}}\widetilde B_\ell,
+ \qquad A_e=(A-JAJ)/2=\sum_{\ell\ \text{even}}\widetilde B_\ell.
+\]
+Blocks of the same parity have disjoint vertex supports. Up to a simultaneous row and column permutation, each matrix is a direct sum of its bipartite blocks and zeros. Hence $\norm{A_o}_*+\norm{A_e}_*=\Omega(W)$. Orthogonal invariance and the triangle inequality give $\norm{A_o}_*\le\norm A_*$ and $\norm{A_e}_*\le\norm A_*$, yielding $\Omega(W)\le2\norm A_*$. Empty parity classes contribute zero.
+\end{proof}
+
+For two scalar weights $W_1=W_2=[1]$, the three-vertex path has eigenvalues $0,\pm\sqrt2$, so $E(A)=2\sqrt2$ and $\Omega=4$. The block identity is therefore not a full-network identity. The comparison proof depends on consecutive-layer connections; additional skip, recurrent or within-layer edges require a separate analysis.
+
+\paragraph{Dependence on parametrization.}
+For a two-layer bias-free ReLU network $h(x)=W_2\operatorname{ReLU}(W_1x)$ and any $c>0$, positive homogeneity gives
+\[
+ (c^{-1}W_2)\operatorname{ReLU}(cW_1x)=h(x),\qquad
+ \Omega(cW_1,c^{-1}W_2)=2(c\norm{W_1}_*+c^{-1}\norm{W_2}_*).
+\]
+The latter generally changes with $c$; for scalar unit weights it changes from $4$ to $5$ at $c=2$. Predictions and data loss are unchanged, but weight decay generally changes. Thus $\Omega$ describes parameters, not an invariant of the represented function.
+
+\section{Local stability relative to a minimizer set}\label{sec:stability}
+The parameter space is the finite-dimensional Euclidean product
+\[
+ \Theta=\prod_{\ell=1}^m\R^{n_\ell\times n_{\ell-1}}
+ \times\prod_{\ell=1}^m\R^{n_\ell},\quad
+ \norm{\theta}_2^2=\sum_\ell\norm{W_\ell}_F^2+\sum_\ell\norm{b_\ell}_2^2.
+\]
+Write $\norm W_F^2=\sum_\ell\norm{W_\ell}_F^2$ and
+$d_\ell=\min(n_\ell,n_{\ell-1})$, $D=\sum_\ell d_\ell$.
+
+\begin{lemma}[Perturbation estimate]\label{lem:perturbation}
+For any two weight collections $W,V$, let $R(W,V)=\sum_\ell\rank(W_\ell-V_\ell)$. Then
+\begin{align}\label{eq:perturbation}
+ |\Omega(W)-\Omega(V)|
+ &\le 2\sum_\ell\norm{W_\ell-V_\ell}_*
+ \le2\sqrt{R(W,V)}\norm{W-V}_F\\
+ &\le2\sqrt D\norm{W-V}_F.\nonumber
+\end{align}
+For $\theta=(W,b)$ and $\eta=(V,c)$, $\norm{W-V}_F\le\norm{\theta-\eta}_2$.
+\end{lemma}
+\begin{proof}
+The scalar triangle inequality and reverse triangle inequality for the nuclear norm give the first bound. For a matrix $M$ of rank $r$, Cauchy--Schwarz on its nonzero singular values gives $\norm M_*\le\sqrt r\norm M_F$. Applying this to each difference and then applying Cauchy--Schwarz across layers gives the second bound. Finally $R(W,V)\le D$ and the parameter norm includes the nonnegative squared bias differences. The rank-zero case is immediate.
+\end{proof}
+The pair-dependent $R(W,V)$ is not a uniform constant. An empirical numerical rank may underestimate the mathematical rank, so a thresholded rank cannot replace $R$ in a rigorous certificate. Known analytic ranks or the conservative dimension bound $D$ are suitable. The same proof, using $|\norm A_*-\norm{\widetilde A}_*|\le\norm{A-\widetilde A}_*$, also bounds $|E(A(W))-E(A(V))|$ by the right-hand sides of~\eqref{eq:perturbation}.
+
+\begin{lemma}[Existence and projection]\label{lem:existence}
+If $f_{\rm data}:\Theta\to\R$ is continuous and bounded below, and $\beta>0$, then
+$f_{\rm reg}(\theta)=f_{\rm data}(\theta)+(\beta/2)\norm\theta_2^2$
+has a nonempty compact global minimizer set. Every nonempty closed set $S\subset\Theta$ admits a nearest point to each $\theta\in\Theta$. That nearest point is unique when $S$ is convex; uniqueness is not asserted for a general minimizer set.
+\end{lemma}
+\begin{proof}
+If $f_{\rm data}\ge a$, then $f_{\rm reg}(\theta)\ge a+(\beta/2)\norm\theta_2^2$, proving coercivity. A nonempty sublevel set is compact, and continuity yields an attained minimum and a compact minimizer set. For a closed, possibly unbounded $S$, fix $s_0\in S$. A minimizing sequence for distance from $\theta$ can be restricted to the closed ball of radius $\norm{\theta-s_0}_2+1$ about $\theta$. Compactness provides a convergent subsequence with limit in $S$ attaining the distance. Strict convexity of squared distance gives uniqueness on a convex set.
+\end{proof}
+Continuity alone is insufficient for the first conclusion: $f_{\rm data}(t)=-t^4$ defeats quadratic regularization. Regularization must cover all parameters whose escape is to be excluded. A weight budget bounds $W$ but does not make $(W,b)$ compact when biases are free. Existence does not establish quadratic growth.
+
+\begin{theorem}[Quadratic-growth stability]\label{thm:qg}
+Fix an objective $f:\Theta\to\R$ with finite attained global minimum $f_*$ and nonempty closed global minimizer set $S$. Suppose a specified neighborhood $\mathcal U$ of $S$ and $\gamma>0$ satisfy
+\begin{equation}\label{eq:qg}
+ f(\theta)-f_*\ge\frac\gamma2\dist(\theta,S)^2,
+ \qquad\theta\in\mathcal U.
+\end{equation}
+For every $\theta=(W,b)\in\mathcal U$ and every nearest point $\theta^+=(W^+,b^+)\in S$,
+\begin{equation}\label{eq:stability}
+ |\Omega(W)-\Omega(W^+)|
+ \le2\sqrt{\frac{2R(W,W^+)}\gamma}\sqrt{f(\theta)-f_*}
+ \le2\sqrt{\frac{2D}\gamma}\sqrt{f(\theta)-f_*}.
+\end{equation}
+The same inequalities hold with the left side replaced by $|E(A(W))-E(A(W^+))|$.
+\end{theorem}
+\begin{proof}
+Lemma~\ref{lem:existence} supplies a nearest point. By Lemma~\ref{lem:perturbation},
+\[
+ |\Omega(W)-\Omega(W^+)|\le2\sqrt{R(W,W^+)}\norm{W-W^+}_F
+ \le2\sqrt{R(W,W^+)}\dist(\theta,S).
+\]
+Apply~\eqref{eq:qg} and $R\le D$. The adjacency version uses the observation after Lemma~\ref{lem:perturbation}.
+\end{proof}
+
+The objective in this theorem is fixed once and for all: choosing $f=f_{\rm reg}$ does not provide a certificate for a gap in $f_{\rm data}$ or in a hinge-penalized objective. A small loss gap implies a bounded spectral variation under~\eqref{eq:qg}; the reverse implication has not been established. Nor is $\Omega(W^+)$ necessarily the smallest surrogate among minimizers. For example $f(w_1,w_2)=(w_1-1)^2/2$ has $S=\{1\}\times\R$, on which $2(|w_1|+|w_2|)$ varies. A nearest point is a selected reference, not a canonical minimum-energy representative.
+
+For a constrained or local version, replace $S$ explicitly by a nonempty closed set of minimizers of $f$ on a specified domain $K$, with common value $f_K$. If~\eqref{eq:qg} is assumed on $\mathcal U\cap K$ with $f_K$ and that $S$, the identical proof gives~\eqref{eq:stability} only for $\theta\in\mathcal U\cap K$. This is a separate hypothesis; it says nothing about infeasible points or other local minima.
+
+\begin{corollary}[Strong convexity as a special case]\label{cor:sc}
+Let $f$ be differentiable and $\mu$-strongly convex on a convex neighborhood $\mathcal U$ of a stationary point $\theta_*$, with $\nabla f(\theta_*)=0$. Then for $\theta\in\mathcal U$,~\eqref{eq:stability} holds with reference $\theta_*$, $\gamma=\mu$ and gap $f(\theta)-f(\theta_*)$.
+\end{corollary}
+\begin{proof}
+The first-order strong-convexity inequality at $\theta_*$ gives
+$f(\theta)-f(\theta_*)\ge(\mu/2)\norm{\theta-\theta_*}_2^2$. Apply Lemma~\ref{lem:perturbation}. For a constrained minimizer on a convex feasible domain, the same conclusion for feasible points follows if the variational inequality $\ip{\nabla f(\theta_*)}{\theta-\theta_*}\ge0$ holds there.
+\end{proof}
+
+\paragraph{Sharpness and limits.}
+For $f(\theta)=(\gamma/2)\norm\theta_2^2$, $\theta_*=0$, zero bias perturbations, and each $W_\ell$ having $r_\ell$ nonzero singular values all equal to a common $c>0$, both sides of the first inequality in~\eqref{eq:stability} equal $2c\sum_\ell r_\ell$. This example verifies attainment of the constant in the stated general class. For a nontrivial equality case with $R(W,W^+)>0$, equality requires alignment in the reverse triangle inequality, common signs in the scalar summation, equality in the singular-value and layer Cauchy--Schwarz inequalities, no bias contribution to the distance, and equality in the growth bound at the point considered. Equal perturbation singular values alone are insufficient. This sharpness example is an elementary consequence, not a claim of new general stability theory.
+
+A positive semidefinite quadratic $f(\theta)=\norm{B\theta-d}_2^2/2$ of rank-deficient $B$ has QG relative to its affine minimizer set with constant equal to the smallest positive eigenvalue of $B^\top B$ when $B\ne0$; it is not strongly convex on the full space. The projection is $\theta^+=\theta-B^\dagger(B\theta-d)$ and the gap equals $\norm{B(\theta-\theta^+)}_2^2/2$, proving the assertion by the singular values of $B$ (the least-squares residual is orthogonal to its range). In contrast, a selected positive eigenvalue of a neural-network Hessian establishes neither full-space strong convexity nor QG on a neighborhood. ReLU losses are also not automatically globally differentiable with Lipschitz gradient.
