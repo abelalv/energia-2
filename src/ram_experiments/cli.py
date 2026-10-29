@@ -266,17 +266,27 @@ def _cmd_kaggle_plan(args: argparse.Namespace) -> int:
     runs = read_manifest(args.manifest)
     total_epochs = sum(run.train.epochs for run in runs)
     seconds_per_epoch = args.seconds_per_epoch
-    estimate = total_epochs * seconds_per_epoch
+    single_gpu_seconds = total_epochs * seconds_per_epoch
+    efficiency = min(max(args.efficiency, 0.1), 1.0)
+    speedup = max(1.0, args.gpus * efficiency) if args.gpus > 1 else 1.0
+    estimate = single_gpu_seconds / speedup
     sessions = max(1, int(-(-estimate // args.session_seconds)))
     plan = {
         "n_runs": len(runs),
         "total_epochs": total_epochs,
         "seconds_per_epoch": seconds_per_epoch,
+        "gpus": args.gpus,
+        "efficiency": efficiency,
+        "speedup_vs_single": speedup,
+        "single_gpu_hours": single_gpu_seconds / 3600,
         "estimated_hours": estimate / 3600,
         "session_seconds": args.session_seconds,
         "sessions": sessions,
         "runs_per_session": max(1, int(-(-len(runs) // sessions))),
-        "note": "Estimate only; replace seconds_per_epoch with the measured pilot value.",
+        "note": (
+            "Estimate only. Replace seconds_per_epoch with the measured pilot value; "
+            "efficiency < 1 accounts for imbalance, CPU-bound projections and overhead."
+        ),
     }
     print(json.dumps(plan, indent=2, sort_keys=True))
     return 0
@@ -475,6 +485,8 @@ def build_parser() -> argparse.ArgumentParser:
     kaggle_parser.add_argument("--manifest", required=True)
     kaggle_parser.add_argument("--seconds-per-epoch", type=float, required=True)
     kaggle_parser.add_argument("--session-seconds", type=float, default=32_400)
+    kaggle_parser.add_argument("--gpus", type=int, default=1)
+    kaggle_parser.add_argument("--efficiency", type=float, default=0.9)
     kaggle_parser.set_defaults(func=_cmd_kaggle_plan)
 
     audit_parser = subparsers.add_parser("audit", help="Print protocol and repository audit")

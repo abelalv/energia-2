@@ -75,6 +75,9 @@ def _launch(command: list[str], gpu: str, log_path: Path, dry_run: bool) -> subp
     environment["CUDA_VISIBLE_DEVICES"] = gpu
     environment["PYTHONUNBUFFERED"] = "1"
     environment.setdefault("OMP_NUM_THREADS", "2")
+    environment.setdefault("OPENBLAS_NUM_THREADS", "2")
+    environment.setdefault("MKL_NUM_THREADS", "2")
+    environment.setdefault("NUMEXPR_NUM_THREADS", "2")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     handle = log_path.open("w", encoding="utf-8")
     process = subprocess.Popen(

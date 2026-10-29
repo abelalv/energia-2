@@ -161,7 +161,7 @@ uv run python -m ram_experiments.cli run \
 # Agregación y presupuesto
 uv run python -m ram_experiments.cli analyze --manifest configs/main_manifest.jsonl --out analysis/main
 uv run python -m ram_experiments.cli kaggle-plan --manifest configs/main_manifest.jsonl \
-  --seconds-per-epoch 12 --session-seconds 30600
+  --seconds-per-epoch 12 --session-seconds 30600 --gpus 2 --efficiency 0.85
 ```
 
 Equivalencia con la interfaz propuesta en el protocolo:

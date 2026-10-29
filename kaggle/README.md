@@ -112,7 +112,8 @@ Después del piloto, ejecuta en local o en el notebook:
 python -m ram_experiments.cli kaggle-plan \
   --manifest configs/main_manifest.jsonl \
   --seconds-per-epoch <medido> \
-  --session-seconds 30600
+  --session-seconds 30600 \
+  --gpus 2 --efficiency 0.85
 ```
 
 Sustituye `<medido>` por el tiempo real por época del piloto para la celda
